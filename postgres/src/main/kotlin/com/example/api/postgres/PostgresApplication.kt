@@ -1,10 +1,18 @@
 package com.example.api.postgres
 
+import org.jetbrains.exposed.sql.Database
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
 
 @SpringBootApplication
-class PostgresApplication
+class PostgresApplication{
+
+    @PostConstruct
+    fun init() {
+        connectToDatabase()
+		createTables
+    }
+}
 
 fun main(args: Array<String>) {
 	runApplication<PostgresApplication>(*args)
