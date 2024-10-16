@@ -10,7 +10,7 @@ class PostgresApplication{
     @PostConstruct
     fun init() {
         connectToDatabase()
-		createTables
+		createTables()
     }
 }
 

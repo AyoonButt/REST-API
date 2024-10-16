@@ -1,65 +1,120 @@
+package com.example.api.postgres.services
+
 class Posts {
 
-    private suspend fun addPostsToDatabase(
-        mediaType: String,
-        dataList: List<Data>,
-        providerId: Int
-    ) {
+    private val client = OkHttpClient()
+
+    // Suspend function to fetch posts (movies/series) from the API
+    suspend fun fetchPostsFromAPI(mediaType: String, providerId: Int): List<Post> {
+        val request = Request.Builder()
+            .url("https://api.themoviedb.org/3/$mediaType/popular?provider=$providerId&language=en-US&page=1")
+            .get()
+            .addHeader("accept", "application/json")
+            .addHeader("Authorization", "Bearer YOUR_API_KEY")
+            .build()
+
+        return withContext(Dispatchers.IO) {
+            try {
+                val response = client.newCall(request).execute()
+                val responseBody = response.body?.string()
+                responseBody?.let {
+                    parsePosts(it, mediaType, providerId) // Parses and returns List<Post>
+                } ?: emptyList()
+            } catch (e: IOException) {
+                e.printStackTrace()
+                emptyList()
+            }
+        }
+    }
+
+    // Function to insert posts into the database
+    suspend fun addPostsToDatabase(mediaType: String, dataList: List<Post>, providerId: Int) {
         withContext(Dispatchers.IO) {
             transaction {
                 dataList.forEach { data ->
                     Posts.insert {
-                        it[tmdbId] = data.id
+                        it[tmdbId] = data.tmdbId
                         it[title] = data.title
-                        it[releaseDate] = data.release_date
+                        it[releaseDate] = data.releaseDate
                         it[overview] = data.overview
-                        it[posterPath] = data.poster_path
-                        it[voteAverage] = data.vote_average
-                        it[voteCount] = data.vote_count
-                        it[genreIds] = data.genre_ids.joinToString(",")
-                        it[originalLanguage] = data.original_language
-                        it[originalTitle] = data.original_title
+                        it[posterPath] = data.posterPath
+                        it[voteAverage] = data.voteAverage
+                        it[voteCount] = data.voteCount
+                        it[genreIds] = data.genreIds ?: ""
+                        it[originalLanguage] = data.originalLanguage
+                        it[originalTitle] = data.originalTitle
                         it[popularity] = data.popularity
                         it[type] = mediaType
-                        it[subscription] =
-                            providerId.toString()  // Store providerId in subscription column
+                        it[subscription] = providerId.toString()
                     }
                 }
             }
         }
     }
 
+    // Parse the posts from the API response
+    private fun parsePosts(responseBody: String, mediaType: String, providerId: Int): List<Post> {
+        val jsonObject = JSONObject(responseBody)
+        val results = jsonObject.getJSONArray("results")
+        val posts = mutableListOf<Post>()
 
-    private suspend fun fetchPostsFromDatabase(limit: Int, offset: Int): List<Post> {
-        return transaction {
-            Posts.selectAll()
-                .limit(limit, offset.toLong())
-                .map { row ->
-                    Post(
-                        postId = row[Posts.postId],
-                        tmdbId = row[Posts.tmdbId],
-                        type = row[Posts.type],
-                        title = row[Posts.title],
-                        subscription = row[Posts.subscription],
-                        releaseDate = row[Posts.releaseDate],
-                        overview = row[Posts.overview],
-                        posterPath = row[Posts.posterPath],
-                        voteAverage = row[Posts.voteAverage],
-                        voteCount = row[Posts.voteCount],
-                        originalLanguage = row[Posts.originalLanguage],
-                        originalTitle = row[Posts.originalTitle],
-                        popularity = row[Posts.popularity],
-                        genreIds = row[Posts.genreIds],
-                        videoKey = row[Posts.videoKey]
-                    )
-                }
+        for (i in 0 until results.length()) {
+            val result = results.getJSONObject(i)
+            val post = Post(
+                tmdbId = result.getInt("id"),
+                type = mediaType,
+                title = result.optString("title"),
+                subscription = providerId.toString(),
+                releaseDate = result.optString("release_date"),
+                overview = result.optString("overview"),
+                posterPath = result.optString("poster_path"),
+                voteAverage = result.optDouble("vote_average"),
+                voteCount = result.optInt("vote_count"),
+                originalLanguage = result.optString("original_language"),
+                originalTitle = result.optString("original_title"),
+                popularity = result.optDouble("popularity"),
+                genreIds = result.optJSONArray("genre_ids")?.joinToString(",") { it.toString() },
+                videoKey = null // Not available at this stage
+            )
+            posts.add(post)
+        }
+
+        return posts
+    }
+
+    // Suspend function to fetch posts from the database
+    suspend fun fetchPostsFromDatabase(limit: Int, offset: Int): List<Post> {
+        return withContext(Dispatchers.IO) {
+            transaction {
+                Posts.selectAll()
+                    .limit(limit, offset.toLong())
+                    .map { row ->
+                        Post(
+                            postId = row[Posts.postId],
+                            tmdbId = row[Posts.tmdbId],
+                            type = row[Posts.type],
+                            title = row[Posts.title],
+                            subscription = row[Posts.subscription],
+                            releaseDate = row[Posts.releaseDate],
+                            overview = row[Posts.overview],
+                            posterPath = row[Posts.posterPath],
+                            voteAverage = row[Posts.voteAverage],
+                            voteCount = row[Posts.voteCount],
+                            originalLanguage = row[Posts.originalLanguage],
+                            originalTitle = row[Posts.originalTitle],
+                            popularity = row[Posts.popularity],
+                            genreIds = row[Posts.genreIds],
+                            videoKey = row[Posts.videoKey]
+                        )
+                    }
+            }
         }
     }
 
-    private fun updateLikeCount(postId: Int) {
+    // Update like count for a post
+    fun updateLikeCount(postId: Int) {
         transaction {
             Posts.update({ Posts.postId eq postId }) {
-                // Use a subquery to safely increment the count
                 it[postLikeCount] =
                     (Posts.slice(postLikeCount).select { Posts.postId eq postId }
                         .singleOrNull()?.get(postLikeCount) ?: 0) + 1
@@ -67,51 +122,41 @@ class Posts {
         }
     }
 
+    // Select the best video key based on priority
     fun selectBestVideoKey(videos: List<Video>): String? {
-        // Define the priority order for video types
         val priorityOrder = listOf("Short", "Trailer", "Teaser", "Featurette", "Clip")
-    
-        // Filter and sort videos based on priority and official status
+
         val filteredVideos = videos
-            .filter { video ->
-                video.isOfficial && priorityOrder.contains(video.type)
-            }
-            .sortedWith(
-                compareBy(
-                    { priorityOrder.indexOf(it.type) },  // Prioritize by type
-                    { it.publishedAt }  // Then by publication date (newest first)
-                )
-            )
-    
-        // If no official videos found, look for unofficial trailers or any video published most recently
-        val bestVideo = filteredVideos.lastOrNull()
-            ?: videos
-                .filter { video ->
-                    video.type == "Trailer" && !video.isOfficial
-                }
+            .filter { video -> video.isOfficial && priorityOrder.contains(video.type) }
+            .sortedWith(compareBy({ priorityOrder.indexOf(it.type) }, { it.publishedAt }))
+
+        return filteredVideos.lastOrNull()?.key
+            ?: videos.filter { video -> video.type == "Trailer" && !video.isOfficial }
                 .maxByOrNull { it.publishedAt }
-            ?: videos.maxByOrNull { it.publishedAt }
-    
-        return bestVideo?.key
+                ?.key ?: videos.maxByOrNull { it.publishedAt }?.key
     }
 
-    private fun fetchVideosFromDatabase(limit: Int, offset: Int): List<Pair<String, Int>> {
+    // Fetch videos from the database
+    fun fetchVideosFromDatabase(limit: Int, offset: Int): List<Pair<String, Int>> {
         val videoData = mutableListOf<Pair<String, Int>>()
 
         transaction {
-            val postsQuery = Posts
-                .selectAll()
+            Posts.selectAll()
                 .limit(limit, offset.toLong())
-
-            for (post in postsQuery) {
-                val postId = post[Posts.postId]
-                val videoKey = post[Posts.videoKey]
-                if (videoKey != null) {
-                    videoData.add(Pair(videoKey, postId))
+                .forEach { post ->
+                    val postId = post[Posts.postId]
+                    val videoKey = post[Posts.videoKey]
+                    if (videoKey != null) {
+                        videoData.add(Pair(videoKey, postId))
+                    }
                 }
-            }
         }
 
         return videoData
+    }
+
+    // Example of REST API to get posts with pagination
+    suspend fun getPaginatedPostsAPI(limit: Int, offset: Int): List<Post> {
+        return fetchPostsFromDatabase(limit, offset)
     }
 }

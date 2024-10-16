@@ -1,3 +1,5 @@
+package com.example.api.postgres.services
+
 class Credits {
 
     fun parseAndInsertCredits(creditsJson: String, postId: Int) {
@@ -47,5 +49,52 @@ class Credits {
                 }
             }
         }
+    }
+
+    fun loadCreditsFromDatabase(postId: Int): Map<String, List<Map<String, Any?>>> {
+        val castList = mutableListOf<Map<String, Any?>>()
+        val crewList = mutableListOf<Map<String, Any?>>()
+
+        transaction {
+            // Load cast details from the database
+            Cast.select { Cast.postId eq postId }.forEach { row ->
+                castList.add(
+                    mapOf(
+                        "personId" to row[Cast.personId],
+                        "name" to row[Cast.name],
+                        "gender" to row[Cast.gender],
+                        "knownForDepartment" to row[Cast.knownForDepartment],
+                        "character" to row[Cast.character],
+                        "episodeCount" to row[Cast.episodeCount],
+                        "orderIndex" to row[Cast.orderIndex],
+                        "popularity" to row[Cast.popularity],
+                        "profilePath" to row[Cast.profilePath]
+                    )
+                )
+            }
+
+            // Load crew details from the database
+            Crew.select { Crew.postId eq postId }.forEach { row ->
+                crewList.add(
+                    mapOf(
+                        "personId" to row[Crew.personId],
+                        "name" to row[Crew.name],
+                        "gender" to row[Crew.gender],
+                        "knownForDepartment" to row[Crew.knownForDepartment],
+                        "job" to row[Crew.job],
+                        "department" to row[Crew.department],
+                        "episodeCount" to row[Crew.episodeCount],
+                        "popularity" to row[Crew.popularity],
+                        "profilePath" to row[Crew.profilePath]
+                    )
+                )
+            }
+        }
+
+        // Return the cast and crew information as a map
+        return mapOf(
+            "cast" to castList,
+            "crew" to crewList
+        )
     }
 }

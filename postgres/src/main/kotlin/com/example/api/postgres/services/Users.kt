@@ -1,94 +1,53 @@
-class UserService {
+package com.example.api.postgres.services
 
-    private fun saveSettings() {
-        // Retrieve user registration data
-        val name_string = intent.getStringExtra("name") ?: ""
-        val username_string = intent.getStringExtra("username") ?: ""
-        val email_string = intent.getStringExtra("email") ?: ""
-        val password = intent.getStringExtra("password") ?: ""
+class Users {
 
-        // Retrieve settings data
-        val selectedLanguage = spinnerLanguage.selectedItem.toString()
-        val selectedRegion = spinnerRegion.selectedItem.toString()
-        val languageId = getIso6391(selectedLanguage)
-        val countryId = getIsoCode(selectedRegion)
-
-        val selectedMin = spinnerMin.selectedItem.toString().toInt()
-        val selectedMax = spinnerMax.selectedItem.toString().toInt()
-        val selectedMinTV = spinnerMinTV.selectedItem.toString().toInt()
-        val selectedMaxTV = spinnerMaxTV.selectedItem.toString().toInt()
-
-        val genresToAvoid = selectedGenres.joinToString(", ")
-        val subscriptionNames = getOrderOfSubscriptionItemNames(linearLayoutSubscriptions)
-        val genreNames = getOrderOfItemNames(linearLayoutGenres)
-        val subscriptionIds = getProviderIds(subscriptionNames)
-        val genreIds = getGenreIds(genreNames)
-
-        Log.d(
-            "SettingsInfo",
-            "GenresToAvoid: $genresToAvoid, Subscriptions: $subscriptionIds, Genres: $genreIds"
-        )
-
-        // Insert data into the database
-        val userId = transaction {
+    // Function to add a new user to the database
+    suspend fun addUser(userData: UserData): Int {
+        return transaction {
             // Insert the user
-            Users.insert {
-                it[name] = name_string
-                it[username] = username_string
-                it[email] = email_string
-                it[pswd] = password
-                it[language] = languageId
-                it[region] = countryId ?: "Default"
-                it[minMovie] = selectedMin
-                it[maxMovie] = selectedMax
-                it[minTV] = selectedMinTV
-                it[maxTV] = selectedMaxTV
-                it[oldestDate] = selectedOldestDate
-                it[recentDate] = selectedMostRecentDate
-                it[createdAt] = getCurrentTimestamp()
-            }
-
-            // Retrieve the userId of the inserted user
-            Users
-                .select { Users.email eq email_string } // Assuming email is unique
-                .single()[Users.userId]
-        }
-
-        val sharedPreferences = getSharedPreferences("user_prefs", MODE_PRIVATE)
-        with(sharedPreferences.edit()) {
-            putInt("userId", userId)
-            apply()
-        }
-
-
-        // Insert user subscriptions
-        transaction {
+            val userId = Users.insertAndGetId {
+                it[Users.name] = userData.name
+                it[Users.username] = userData.username
+                it[Users.email] = userData.email
+                it[Users.pswd] = userData.password
+                it[Users.language] = getIso6391(userData.selectedLanguage)
+                it[Users.region] = getIsoCode(userData.selectedRegion) ?: "Default"
+                it[Users.minMovie] = userData.selectedMinMovie
+                it[Users.maxMovie] = userData.selectedMaxMovie
+                it[Users.minTV] = userData.selectedMinTV
+                it[Users.maxTV] = userData.selectedMaxTV
+                it[Users.oldestDate] = selectedOldestDate
+                it[Users.recentDate] = selectedMostRecentDate
+                it[Users.createdAt] = getCurrentTimestamp()
+            }.value
+    
+            // Insert user subscriptions
+            val subscriptionIds = getProviderIds(userData.subscriptionNames)
             subscriptionIds.forEach { providerId ->
                 UserSubscriptions.insert {
-                    it[this.userId] = userId // Use the retrieved userId
-                    it[providerID] = providerId
-                    it[avoidGenres] = genresToAvoid
+                    it[UserSubscriptions.userId] = userId
+                    it[UserSubscriptions.providerID] = providerId
+                    it[UserSubscriptions.avoidGenres] = userData.genresToAvoid.joinToString(", ")
                 }
             }
-        }
-
-        // Insert user genres
-        transaction {
+    
+            // Insert user genres
+            val genreIds = getGenreIds(userData.genreNames)
             genreIds.forEach { genreId ->
                 UserGenres.insert {
-                    it[this.userId] = userId // Use the retrieved userId
-                    it[genreID] = genreId
+                    it[UserGenres.userId] = userId
+                    it[UserGenres.genreID] = genreId
                 }
             }
+    
+            return@transaction userId
         }
-
-        // Navigate to LoginForm
-        val intent = Intent(this, LoginForm::class.java)
-        startActivity(intent)
-        finish()
     }
+    
 
-    private suspend fun checkUserCredentials(username: String, password: String): Boolean {
+    // Function to check user credentials
+    suspend fun checkUserCredentials(username: String, password: String): Boolean {
         return transaction {
             Users.select {
                 (Users.username eq username) and (Users.pswd eq password)
@@ -96,14 +55,16 @@ class UserService {
         }
     }
 
-    private suspend fun updateRecentLogin(username: String) {
+    // Function to update the most recent login timestamp
+    suspend fun updateRecentLogin(username: String) {
         transaction {
             Users.update({ Users.username eq username }) {
-                it[recentLogin] = getCurrentTimestamp() // Update the recentDate column
+                it[Users.recentLogin] = getCurrentTimestamp()
             }
         }
     }
 
+    // Function to fetch user parameters (settings)
     fun fetchUserParams(userId: Int): UserParams? {
         return transaction {
             Users.select { Users.userId eq userId }
@@ -123,6 +84,7 @@ class UserService {
         }
     }
 
+    // Function to get the providers by priority
     fun getProvidersByPriority(userId: Int): List<Int> {
         return transaction {
             UserSubscriptions
@@ -131,5 +93,44 @@ class UserService {
                 .map { it[UserSubscriptions.providerID] }
         }
     }
-    
+
+    // New function to get all user information by userId
+    fun getUserInfo(userId: Int): UserInfo? {
+        return transaction {
+            val user = Users.select { Users.userId eq userId }
+                .mapNotNull {
+                    UserInfo(
+                        userId = it[Users.userId],
+                        name = it[Users.name],
+                        username = it[Users.username],
+                        email = it[Users.email],
+                        language = it[Users.language],
+                        region = it[Users.region],
+                        minMovie = it[Users.minMovie],
+                        maxMovie = it[Users.maxMovie],
+                        minTV = it[Users.minTV],
+                        maxTV = it[Users.maxTV],
+                        oldestDate = it[Users.oldestDate],
+                        recentDate = it[Users.recentDate],
+                        createdAt = it[Users.createdAt]
+                    )
+                }.singleOrNull()
+
+            // Get user subscriptions
+            val subscriptions = UserSubscriptions.select { UserSubscriptions.userId eq userId }
+                .map { it[UserSubscriptions.providerID] }
+
+            // Get user genres
+            val genres = UserGenres.select { UserGenres.userId eq userId }
+                .map { it[UserGenres.genreID] }
+
+            // Combine all information into a UserInfo object
+            if (user != null) {
+                user.subscriptions = subscriptions
+                user.genres = genres
+            }
+
+            return@transaction user
+        }
+    }
 }

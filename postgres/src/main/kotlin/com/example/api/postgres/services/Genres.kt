@@ -1,35 +1,24 @@
+package com.example.api.postgres.services
+
 class Genres {
+
 
     private fun filterGenres(query: String) {
         if (query.isNotEmpty()) {
-            val allGenres = DataManager.getGenres()
+            val allGenres = apiService.getGenres()  // Fetch genres from the API
             val filteredGenres = allGenres
-                .map { it to lcs(it.name, query) }
-                .sortedByDescending { it.second }
-                .map { it.first }
+                .filter { it.name.contains(query, ignoreCase = true) }  // Filter by genre name containing the query
                 .take(5)
-
-            updateGenres(filteredGenres)
-
-        } else {
-            updateGenres(emptyList())
-        }
+        } 
     }
 
     private fun filterAvoidGenres(query: String) {
         if (query.isNotEmpty()) {
-            val allGenres = DataManager.getGenres()
+            val allGenres = apiService.getGenres()  // Fetch genres from the API
             val filteredGenres = allGenres
-                .map { it to lcs(it.name, query) }
-                .sortedByDescending { it.second }
-                .map { it.first }
+                .filter { it.name.contains(query, ignoreCase = true) }  // Filter by genre name containing the query
                 .take(5)
-
-            updateAvoidGenres(filteredGenres)
-
-        } else {
-            updateGenres(emptyList())
-        }
+        } 
     }
 
     fun insertGenres() {
