@@ -1,7 +1,19 @@
-package com.example.api.postgres.services
+package com.api.postgres.services
 
-class Posts {
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
+import org.json.JSONObject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.IOException
 
+@Service
+class Posts @Autowired constructor(
+    private val postRepository: PostRepository
+) {
     private val client = OkHttpClient()
 
     // Suspend function to fetch posts (movies/series) from the API
@@ -28,26 +40,26 @@ class Posts {
     }
 
     // Function to insert posts into the database
+    @Transactional
     suspend fun addPostsToDatabase(mediaType: String, dataList: List<Post>, providerId: Int) {
         withContext(Dispatchers.IO) {
-            transaction {
-                dataList.forEach { data ->
-                    Posts.insert {
-                        it[tmdbId] = data.tmdbId
-                        it[title] = data.title
-                        it[releaseDate] = data.releaseDate
-                        it[overview] = data.overview
-                        it[posterPath] = data.posterPath
-                        it[voteAverage] = data.voteAverage
-                        it[voteCount] = data.voteCount
-                        it[genreIds] = data.genreIds ?: ""
-                        it[originalLanguage] = data.originalLanguage
-                        it[originalTitle] = data.originalTitle
-                        it[popularity] = data.popularity
-                        it[type] = mediaType
-                        it[subscription] = providerId.toString()
-                    }
-                }
+            dataList.forEach { data ->
+                val post = Post(
+                    tmdbId = data.tmdbId,
+                    type = mediaType,
+                    title = data.title,
+                    subscription = providerId.toString(),
+                    releaseDate = data.releaseDate,
+                    overview = data.overview,
+                    posterPath = data.posterPath,
+                    voteAverage = data.voteAverage,
+                    voteCount = data.voteCount,
+                    originalLanguage = data.originalLanguage,
+                    originalTitle = data.originalTitle,
+                    popularity = data.popularity,
+                    genreIds = data.genreIds ?: ""
+                )
+                postRepository.save(post) // Save each post to the database
             }
         }
     }
@@ -85,41 +97,17 @@ class Posts {
     // Suspend function to fetch posts from the database
     suspend fun fetchPostsFromDatabase(limit: Int, offset: Int): List<Post> {
         return withContext(Dispatchers.IO) {
-            transaction {
-                Posts.selectAll()
-                    .limit(limit, offset.toLong())
-                    .map { row ->
-                        Post(
-                            postId = row[Posts.postId],
-                            tmdbId = row[Posts.tmdbId],
-                            type = row[Posts.type],
-                            title = row[Posts.title],
-                            subscription = row[Posts.subscription],
-                            releaseDate = row[Posts.releaseDate],
-                            overview = row[Posts.overview],
-                            posterPath = row[Posts.posterPath],
-                            voteAverage = row[Posts.voteAverage],
-                            voteCount = row[Posts.voteCount],
-                            originalLanguage = row[Posts.originalLanguage],
-                            originalTitle = row[Posts.originalTitle],
-                            popularity = row[Posts.popularity],
-                            genreIds = row[Posts.genreIds],
-                            videoKey = row[Posts.videoKey]
-                        )
-                    }
-            }
+            postRepository.findAllByOrderByPostId(limit, offset)
         }
     }
 
     // Update like count for a post
+    @Transactional
     fun updateLikeCount(postId: Int) {
-        transaction {
-            Posts.update({ Posts.postId eq postId }) {
-                it[postLikeCount] =
-                    (Posts.slice(postLikeCount).select { Posts.postId eq postId }
-                        .singleOrNull()?.get(postLikeCount) ?: 0) + 1
-            }
-        }
+        val post = postRepository.findById(postId).orElseThrow { Exception("Post not found") }
+        // Assuming postLikeCount is an Int field in Post
+        post.likeCount = (post.likeCount ?: 0) + 1
+        postRepository.save(post)
     }
 
     // Select the best video key based on priority
@@ -138,21 +126,10 @@ class Posts {
 
     // Fetch videos from the database
     fun fetchVideosFromDatabase(limit: Int, offset: Int): List<Pair<String, Int>> {
-        val videoData = mutableListOf<Pair<String, Int>>()
-
-        transaction {
-            Posts.selectAll()
-                .limit(limit, offset.toLong())
-                .forEach { post ->
-                    val postId = post[Posts.postId]
-                    val videoKey = post[Posts.videoKey]
-                    if (videoKey != null) {
-                        videoData.add(Pair(videoKey, postId))
-                    }
-                }
-        }
-
-        return videoData
+        return postRepository.findAllByOrderByPostId(limit, offset)
+            .mapNotNull { post ->
+                post.videoKey?.let { Pair(it, post.postId ?: -1) }
+            }
     }
 
     // Example of REST API to get posts with pagination

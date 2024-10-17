@@ -1,3 +1,5 @@
+package com.api.postgres
+
 data class UserInfo(
     val userId: Int,
     val name: String,

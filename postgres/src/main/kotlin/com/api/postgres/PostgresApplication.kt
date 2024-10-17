@@ -1,4 +1,4 @@
-package com.example.api.postgres
+package com.api.postgres
 
 import org.jetbrains.exposed.sql.Database
 import org.springframework.boot.autoconfigure.SpringBootApplication
