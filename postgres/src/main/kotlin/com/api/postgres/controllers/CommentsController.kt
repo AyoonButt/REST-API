@@ -1,8 +1,9 @@
 package com.api.postgres.controllers
 
-import com.api.postgres.entities.CommentEntity
+import com.api.postgres.models.CommentEntity
 import com.api.postgres.services.Comments
 import kotlinx.coroutines.runBlocking
+
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*

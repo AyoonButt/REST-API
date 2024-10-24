@@ -1,6 +1,8 @@
-package com.api.postgres.repositories
+package com.api.postgres.services
 
 
+import com.api.postgres.models.CommentEntity
+import com.api.postgres.repositories.CommentRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.springframework.stereotype.Service
@@ -15,7 +17,7 @@ class Comments(
     @Transactional(readOnly = true)
     suspend fun loadComments(postId: Int): List<CommentEntity> {
         return withContext(Dispatchers.IO) {
-            commentRepository.findByPostId(postId)
+            commentRepository.findByPostPostId(postId)
         }
     }
 

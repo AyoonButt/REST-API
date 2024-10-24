@@ -1,12 +1,11 @@
-package com.api.postgres.model
+package com.api.postgres.models
 
 import jakarta.persistence.*
 
 @Entity
 @Table(name = "genres")
-data class Genre(
+data class GenreEntity(
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "genre_id")
     val genreId: Int? = null,
 

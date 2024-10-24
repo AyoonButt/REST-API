@@ -1,4 +1,4 @@
-package com.api.postgres.model
+package com.api.postgres.models
 
 import jakarta.persistence.*
 
@@ -6,7 +6,6 @@ import jakarta.persistence.*
 @Table(name = "subscription_providers")
 data class SubscriptionProvider(
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "provider_id")
     val providerId: Int? = null,
 

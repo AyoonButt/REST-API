@@ -1,6 +1,6 @@
 package com.api.postgres.controllers
 
-import com.api.postgres.entities.UserPostInteraction
+import com.api.postgres.models.UserPostInteraction
 import com.api.postgres.services.PostInteractions
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -24,9 +24,9 @@ class PostInteractionsController(
     fun updateInteractionTimestamp(
         @RequestParam postId: Int,
         @RequestParam userId: Int,
-        @RequestParam timestamp: Long
+        @RequestParam timestamp: Long,
     ): ResponseEntity<String> {
-        postInteractionsService.updateInteractionTimestamp(postId, timestamp)
+        postInteractionsService.updateInteractionTimestamp(postId, userId, timestamp)
         return ResponseEntity.ok("Timestamp updated successfully for postId: $postId")
     }
 

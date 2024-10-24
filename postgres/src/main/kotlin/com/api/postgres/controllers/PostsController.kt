@@ -1,56 +1,56 @@
 package com.api.postgres.controllers
 
+import com.api.postgres.models.PostEntity
 import com.api.postgres.services.Posts
-import com.api.postgres.models.Post
-import kotlinx.coroutines.runBlocking
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
+import kotlinx.coroutines.runBlocking
 
 @RestController
 @RequestMapping("/api/posts")
-class PostsController(private val postsService: Posts) {
+class PostsController(
+    private val postsService: Posts
+) {
 
-    // Endpoint to fetch paginated posts from the database
-    @GetMapping("/paginated")
-    fun getPaginatedPosts(
-        @RequestParam("limit", defaultValue = "10") limit: Int,
-        @RequestParam("offset", defaultValue = "0") offset: Int
-    ): ResponseEntity<List<Post>> = runBlocking {
-        val posts = postsService.getPaginatedPostsAPI(limit, offset)
-        ResponseEntity.ok(posts)
-    }
-
-    // Endpoint to fetch posts from the external API and store them in the database
-    @PostMapping("/fetch")
-    fun fetchAndSavePosts(
-        @RequestParam("mediaType") mediaType: String,
-        @RequestParam("providerId") providerId: Int
-    ): ResponseEntity<String> = runBlocking {
-        val fetchedPosts = postsService.fetchPostsFromAPI(mediaType, providerId)
-        if (fetchedPosts.isNotEmpty()) {
-            postsService.addPostsToDatabase(mediaType, fetchedPosts, providerId)
-            ResponseEntity.ok("Posts successfully fetched and saved.")
-        } else {
-            ResponseEntity.status(500).body("Failed to fetch posts.")
+    // Endpoint to add posts to the database
+    @PostMapping("/add")
+    fun addPosts(
+        @RequestParam mediaType: String,
+        @RequestParam providerId: Int,
+        @RequestBody dataList: List<PostEntity>
+    ): ResponseEntity<String> {
+        return runBlocking {
+            postsService.addPostsToDatabase(mediaType, dataList, providerId)
+            ResponseEntity.ok("Posts added successfully")
         }
     }
 
-    // Endpoint to update the like count of a post
+    // Endpoint to fetch posts with pagination
+    @GetMapping("/list")
+    fun getPaginatedPosts(
+        @RequestParam limit: Int,
+        @RequestParam offset: Int
+    ): ResponseEntity<List<PostEntity>> {
+        return runBlocking {
+            val posts = postsService.getPaginatedPostsAPI(limit, offset)
+            ResponseEntity.ok(posts)
+        }
+    }
+
+    // Endpoint to update like count for a post
     @PutMapping("/like/{postId}")
     fun updateLikeCount(@PathVariable postId: Int): ResponseEntity<String> {
-        return try {
-            postsService.updateLikeCount(postId)
-            ResponseEntity.ok("Like count updated successfully.")
-        } catch (e: Exception) {
-            ResponseEntity.status(404).body("Post not found.")
-        }
+        postsService.updateLikeCount(postId)
+        return ResponseEntity.ok("Like count updated successfully")
     }
 
-    // Endpoint to fetch the best video key for a specific post based on priority
-    @GetMapping("/{postId}/best-video")
-    fun getBestVideoKey(@PathVariable postId: Int): ResponseEntity<String?> = runBlocking {
-        val videos = postsService.fetchVideosFromDatabase(1, 0) // Fetching videos for the post
-        val bestVideoKey = postsService.selectBestVideoKey(videos.map { Video(it.first, true, "Trailer", "2022-01-01") }) // Dummy example for now
-        ResponseEntity.ok(bestVideoKey)
+    // Endpoint to fetch videos from the database
+    @GetMapping("/videos")
+    fun getVideos(
+        @RequestParam limit: Int,
+        @RequestParam offset: Int
+    ): ResponseEntity<List<Pair<String, Int>>> {
+        val videos = postsService.fetchVideosFromDatabase(limit, offset)
+        return ResponseEntity.ok(videos)
     }
 }

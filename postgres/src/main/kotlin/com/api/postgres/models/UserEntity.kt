@@ -1,11 +1,10 @@
-package com.api.postgres.model
+package com.api.postgres.models
 
 import jakarta.persistence.*
-import java.io.Serializable
 
 @Entity
 @Table(name = "users")
-data class User(
+data class UserEntity(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "user_id")
@@ -48,7 +47,7 @@ data class User(
     val recentDate: String,
 
     @Column(name = "recent_login", length = 75)
-    val recentLogin: String,
+    var recentLogin: String,
 
     @Column(name = "created_at", length = 75)
     val createdAt: String

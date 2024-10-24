@@ -1,6 +1,6 @@
 package com.api.postgres.services
 
-import com.api.postgres.models.Genre
+import com.api.postgres.models.GenreEntity
 import com.api.postgres.repositories.GenreRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -8,12 +8,7 @@ import org.springframework.transaction.annotation.Transactional
 @Service
 class Genres(private val genreRepository: GenreRepository) {
 
-    private val genresCache: MutableSet<Genre> = mutableSetOf()
-
-    // Initialize with default genres
-    init {
-        insertGenres()
-    }
+    private val genresCache: MutableSet<GenreEntity> = mutableSetOf()
 
     @Transactional
     fun insertGenres() {
@@ -22,33 +17,33 @@ class Genres(private val genreRepository: GenreRepository) {
             if (allGenres.isEmpty()) {
                 // Default genres to insert if the database is empty
                 val defaultGenres = listOf(
-                    Genre(genreId = 28, name = "Action"),
-                    Genre(genreId = 12, name = "Adventure"),
-                    Genre(genreId = 16, name = "Animation"),
-                    Genre(genreId = 35, name = "Comedy"),
-                    Genre(genreId = 80, name = "Crime"),
-                    Genre(genreId = 99, name = "Documentary"),
-                    Genre(genreId = 18, name = "Drama"),
-                    Genre(genreId = 10751, name = "Family"),
-                    Genre(genreId = 14, name = "Fantasy"),
-                    Genre(genreId = 36, name = "History"),
-                    Genre(genreId = 27, name = "Horror"),
-                    Genre(genreId = 10402, name = "Music"),
-                    Genre(genreId = 9648, name = "Mystery"),
-                    Genre(genreId = 10749, name = "Romance"),
-                    Genre(genreId = 878, name = "Science Fiction"),
-                    Genre(genreId = 10770, name = "TV Movie"),
-                    Genre(genreId = 53, name = "Thriller"),
-                    Genre(genreId = 10752, name = "War"),
-                    Genre(genreId = 37, name = "Western"),
-                    Genre(genreId = 10759, name = "Action & Adventure"),
-                    Genre(genreId = 10762, name = "Kids"),
-                    Genre(genreId = 10763, name = "News"),
-                    Genre(genreId = 10764, name = "Reality"),
-                    Genre(genreId = 10765, name = "Sci-Fi & Fantasy"),
-                    Genre(genreId = 10766, name = "Soap"),
-                    Genre(genreId = 10767, name = "Talk"),
-                    Genre(genreId = 10768, name = "War & Politics")
+                    GenreEntity(genreId = 28, genreName = "Action"),
+                    GenreEntity(genreId = 12, genreName = "Adventure"),
+                    GenreEntity(genreId = 16, genreName = "Animation"),
+                    GenreEntity(genreId = 35, genreName = "Comedy"),
+                    GenreEntity(genreId = 80, genreName = "Crime"),
+                    GenreEntity(genreId = 99, genreName = "Documentary"),
+                    GenreEntity(genreId = 18, genreName = "Drama"),
+                    GenreEntity(genreId = 10751, genreName = "Family"),
+                    GenreEntity(genreId = 14, genreName = "Fantasy"),
+                    GenreEntity(genreId = 36, genreName = "History"),
+                    GenreEntity(genreId = 27, genreName = "Horror"),
+                    GenreEntity(genreId = 10402, genreName = "Music"),
+                    GenreEntity(genreId = 9648, genreName = "Mystery"),
+                    GenreEntity(genreId = 10749, genreName = "Romance"),
+                    GenreEntity(genreId = 878, genreName = "Science Fiction"),
+                    GenreEntity(genreId = 10770, genreName = "TV Movie"),
+                    GenreEntity(genreId = 53, genreName = "Thriller"),
+                    GenreEntity(genreId = 10752, genreName = "War"),
+                    GenreEntity(genreId = 37, genreName = "Western"),
+                    GenreEntity(genreId = 10759, genreName = "Action & Adventure"),
+                    GenreEntity(genreId = 10762, genreName = "Kids"),
+                    GenreEntity(genreId = 10763, genreName = "News"),
+                    GenreEntity(genreId = 10764, genreName = "Reality"),
+                    GenreEntity(genreId = 10765, genreName = "Sci-Fi & Fantasy"),
+                    GenreEntity(genreId = 10766, genreName = "Soap"),
+                    GenreEntity(genreId = 10767, genreName = "Talk"),
+                    GenreEntity(genreId = 10768, genreName = "War & Politics")
                 )
 
                 // Insert default genres into the database
@@ -62,20 +57,20 @@ class Genres(private val genreRepository: GenreRepository) {
         }
     }
 
-    fun filterGenres(query: String): List<Genre> {
+    fun filterGenres(query: String): List<GenreEntity> {
         return if (query.isNotEmpty()) {
-            genreRepository.findByNameContainingIgnoreCase(query).take(5)
+            genreRepository.findByGenreNameContainingIgnoreCase(query).take(5)
         } else {
             emptyList()
         }
     }
 
-    fun filterAvoidGenres(query: String): List<Genre> {
+    fun filterAvoidGenres(query: String): List<GenreEntity> {
         return filterGenres(query) // Reusing filterGenres, modify if needed
     }
 
     @Transactional
-    fun addGenre(genre: Genre) {
+    fun addGenre(genre: GenreEntity) {
         genreRepository.save(genre)
         genresCache.add(genre)
     }

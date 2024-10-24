@@ -1,6 +1,7 @@
 package com.api.postgres.services
 
-import com.api.postgres.entities.UserPostInteraction
+
+import com.api.postgres.models.UserPostInteraction
 import com.api.postgres.repositories.UserPostInteractionRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -20,9 +21,9 @@ class PostInteractions(private val interactionRepository: UserPostInteractionRep
      * Updates the interaction timestamp for a given postId.
      */
     @Transactional
-    fun updateInteractionTimestamp(postId: Int, timestamp: Long) {
-        interactionRepository.findByUserIdAndPostId(interactionData.userId, postId)?.let { interaction ->
-            interaction.timestamp = timestamp
+    fun updateInteractionTimestamp(userId: Int, postId: Int, timestamp: Long) {
+        interactionRepository.findByUserUserIdAndPostPostId(userId, postId)?.let { interaction ->
+            interaction.timestamp = timestamp.toString()
             interactionRepository.save(interaction)
         }
     }
@@ -34,7 +35,7 @@ class PostInteractions(private val interactionRepository: UserPostInteractionRep
      */
     @Transactional(readOnly = true)
     fun getPostInteractionsByUser(userId: Int): List<UserPostInteraction> {
-        return interactionRepository.findByUserId(userId)
+        return interactionRepository.findByUserUserId(userId)
     }
 
     /**
@@ -45,7 +46,7 @@ class PostInteractions(private val interactionRepository: UserPostInteractionRep
      */
     @Transactional(readOnly = true)
     fun getPostInteraction(userId: Int, postId: Int): UserPostInteraction? {
-        return interactionRepository.findByUserIdAndPostId(userId, postId)
+        return interactionRepository.findByUserUserIdAndPostPostId(userId, postId)
     }
 
     /**
@@ -55,7 +56,7 @@ class PostInteractions(private val interactionRepository: UserPostInteractionRep
      */
     @Transactional(readOnly = true)
     fun getLikedPosts(userId: Int): List<Int> {
-        return interactionRepository.findLikedPostsByUserId(userId)
+        return interactionRepository.findLikedPostsByUserUserId(userId)
     }
 
     /**
@@ -65,7 +66,7 @@ class PostInteractions(private val interactionRepository: UserPostInteractionRep
      */
     @Transactional(readOnly = true)
     fun getSavedPosts(userId: Int): List<Int> {
-        return interactionRepository.findSavedPostsByUserId(userId)
+        return interactionRepository.findSavedPostsByUserUserId(userId)
     }
 
     /**
@@ -75,6 +76,6 @@ class PostInteractions(private val interactionRepository: UserPostInteractionRep
      */
     @Transactional(readOnly = true)
     fun getCommentMadePosts(userId: Int): List<Int> {
-        return interactionRepository.findCommentMadePostsByUserId(userId)
+        return interactionRepository.findCommentMadePostsByUserUserId(userId)
     }
 }

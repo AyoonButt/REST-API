@@ -1,11 +1,15 @@
 package com.api.postgres.services
 
+
+import com.api.postgres.models.CastEntity
+import com.api.postgres.models.CrewEntity
+import com.api.postgres.repositories.CastRepository
+import com.api.postgres.repositories.CrewRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import java.math.BigDecimal
+import org.json.JSONObject
 
 @Service
 class Credits(

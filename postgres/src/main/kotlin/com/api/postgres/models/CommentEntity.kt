@@ -1,12 +1,13 @@
-package com.api.postgres.model
+package com.api.postgres.models
+
 
 import jakarta.persistence.*
 
-import jakarta.persistence.*
+
 
 @Entity
 @Table(name = "comments")
-data class Comment(
+data class CommentEntity(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "comment_id")
@@ -14,11 +15,11 @@ data class Comment(
 
     @ManyToOne
     @JoinColumn(name = "user_id")
-    val user: User,
+    val user: UserEntity,
 
     @ManyToOne
     @JoinColumn(name = "post_id")
-    val post: Post,
+    val post: PostEntity,
 
     @Column(name = "content", nullable = false)
     val content: String,

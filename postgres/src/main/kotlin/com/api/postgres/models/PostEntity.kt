@@ -1,10 +1,10 @@
-package com.api.postgres.model
+package com.api.postgres.models
 
 import jakarta.persistence.*
 
 @Entity
 @Table(name = "posts")
-data class Post(
+data class PostEntity(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "post_id")
@@ -14,7 +14,7 @@ data class Post(
     val tmdbId: Int,
 
     @Column(name = "post_like_count")
-    val postLikeCount: Int,
+    var postLikeCount: Int,
 
     @Column(name = "trailer_like_count")
     val trailerLikeCount: Int,

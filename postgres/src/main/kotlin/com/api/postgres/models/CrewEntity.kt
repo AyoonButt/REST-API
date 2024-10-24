@@ -1,4 +1,4 @@
-package com.api.postgres.model
+package com.api.postgres.models
 
 import jakarta.persistence.*
 import java.math.BigDecimal

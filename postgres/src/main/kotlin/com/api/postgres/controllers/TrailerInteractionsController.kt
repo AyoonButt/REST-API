@@ -1,7 +1,8 @@
 package com.api.postgres.controllers
 
-import com.api.postgres.models.TrailerInteractionData
-import com.api.postgres.models.UserTrailerInteractionEntity
+
+import com.api.postgres.models.PostEntity
+import com.api.postgres.models.UserTrailerInteraction
 import com.api.postgres.services.TrailerInteractions
 import kotlinx.coroutines.runBlocking
 import org.springframework.http.ResponseEntity
@@ -24,7 +25,7 @@ class TrailerInteractionsController(private val trailerInteractions: TrailerInte
     // Endpoint to save new interaction data
     @PostMapping("/save")
     fun saveInteractionData(
-        @RequestBody interactionData: TrailerInteractionData
+        @RequestBody interactionData: UserTrailerInteraction
     ): ResponseEntity<String> = runBlocking {
         trailerInteractions.saveInteractionData(interactionData)
         ResponseEntity.ok("Interaction data saved successfully.")
@@ -32,7 +33,7 @@ class TrailerInteractionsController(private val trailerInteractions: TrailerInte
 
     // Endpoint to get trailer interactions by a specific user
     @GetMapping("/user/{userId}")
-    fun getTrailerInteractionsByUser(@PathVariable userId: Int): ResponseEntity<List<UserTrailerInteractionEntity>> = runBlocking {
+    fun getTrailerInteractionsByUser(@PathVariable userId: Int): ResponseEntity<List<UserTrailerInteraction>> = runBlocking {
         val interactions = trailerInteractions.getTrailerInteractionsByUser(userId)
         ResponseEntity.ok(interactions)
     }
@@ -42,28 +43,28 @@ class TrailerInteractionsController(private val trailerInteractions: TrailerInte
     fun getTrailerInteraction(
         @PathVariable userId: Int,
         @PathVariable postId: Int
-    ): ResponseEntity<UserTrailerInteractionEntity?> = runBlocking {
+    ): ResponseEntity<UserTrailerInteraction?> = runBlocking {
         val interaction = trailerInteractions.getTrailerInteraction(userId, postId)
         ResponseEntity.ok(interaction)
     }
 
     // Endpoint to get liked trailers by userId
     @GetMapping("/user/{userId}/liked")
-    fun getLikedTrailers(@PathVariable userId: Int): ResponseEntity<List<Int>> = runBlocking {
+    fun getLikedTrailers(@PathVariable userId: Int): ResponseEntity<List<PostEntity>> = runBlocking {
         val likedTrailers = trailerInteractions.getLikedTrailers(userId)
         ResponseEntity.ok(likedTrailers)
     }
 
     // Endpoint to get saved trailers by userId
     @GetMapping("/user/{userId}/saved")
-    fun getSavedTrailers(@PathVariable userId: Int): ResponseEntity<List<Int>> = runBlocking {
+    fun getSavedTrailers(@PathVariable userId: Int): ResponseEntity<List<PostEntity>> = runBlocking {
         val savedTrailers = trailerInteractions.getSavedTrailers(userId)
         ResponseEntity.ok(savedTrailers)
     }
 
     // Endpoint to get trailers where comments were made by userId
     @GetMapping("/user/{userId}/commented")
-    fun getCommentMadeTrailers(@PathVariable userId: Int): ResponseEntity<List<Int>> = runBlocking {
+    fun getCommentMadeTrailers(@PathVariable userId: Int): ResponseEntity<List<PostEntity>> = runBlocking {
         val commentedTrailers = trailerInteractions.getCommentMadeTrailers(userId)
         ResponseEntity.ok(commentedTrailers)
     }
