@@ -57,4 +57,25 @@ data class PostEntity(
 
     @Column(name = "video_key", length = 100)
     val videoKey: String
-)
+) {
+    // Default constructor for JPA
+    constructor() : this(
+        postId = null,
+        tmdbId = 0, // Provide a default value for tmdbId
+        postLikeCount = 0, // Provide a default value for postLikeCount
+        trailerLikeCount = 0, // Provide a default value for trailerLikeCount
+        type = "", // Provide a default value for type
+        title = "", // Provide a default value for title
+        subscription = "", // Provide a default value for subscription
+        releaseDate = "", // Provide a default value for releaseDate
+        overview = "", // Provide a default value for overview
+        posterPath = "", // Provide a default value for posterPath
+        voteAverage = 0.0, // Provide a default value for voteAverage
+        voteCount = 0, // Provide a default value for voteCount
+        originalLanguage = "", // Provide a default value for originalLanguage
+        originalTitle = "", // Provide a default value for originalTitle
+        popularity = 0.0, // Provide a default value for popularity
+        genreIds = "", // Provide a default value for genreIds
+        videoKey = "" // Provide a default value for videoKey
+    )
+}

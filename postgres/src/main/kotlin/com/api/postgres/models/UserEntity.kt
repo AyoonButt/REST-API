@@ -51,4 +51,23 @@ data class UserEntity(
 
     @Column(name = "created_at", length = 75)
     val createdAt: String
-)
+) {
+    // Default constructor for JPA
+    constructor() : this(
+        userId = null,
+        name = "",
+        username = "",
+        email = "",
+        password = "",
+        language = "",
+        region = "",
+        minMovie = 0,
+        maxMovie = 0,
+        minTV = 0,
+        maxTV = 0,
+        oldestDate = "",
+        recentDate = "",
+        recentLogin = "",
+        createdAt = ""
+    )
+}

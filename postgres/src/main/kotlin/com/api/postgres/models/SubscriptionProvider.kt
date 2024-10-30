@@ -11,4 +11,10 @@ data class SubscriptionProvider(
 
     @Column(name = "provider_name", length = 255, nullable = false)
     val providerName: String
-)
+) {
+    // Default constructor for JPA
+    constructor() : this(
+        providerId = null, // Default value for providerId
+        providerName = "" // Provide a default empty string for providerName
+    )
+}

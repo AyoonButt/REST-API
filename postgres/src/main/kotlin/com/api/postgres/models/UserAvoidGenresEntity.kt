@@ -18,7 +18,14 @@ data class UserAvoidGenres(
     @MapsId("genreId") // Maps the genreId part of the composite key
     @JoinColumn(name = "genre_id", referencedColumnName = "genre_id")
     val genre: GenreEntity // Assuming GenreEntity exists
-)
+) {
+    // Default constructor for JPA
+    constructor() : this(
+        id = UserAvoidGenreId(0, 0), // Provide default values for embedded id
+        user = UserEntity(), // Assuming UserEntity has a default constructor
+        genre = GenreEntity() // Assuming GenreEntity has a default constructor
+    )
+}
 
 @Embeddable
 data class UserAvoidGenreId(
@@ -27,4 +34,8 @@ data class UserAvoidGenreId(
 
     @Column(name = "genre_id")
     val genreId: Int
-) : Serializable
+) : Serializable {
+    // Default constructor for JPA
+    constructor() : this(0, 0) // Provide default values
+}
+

@@ -28,21 +28,22 @@ interface UserTrailerInteractionRepository : JpaRepository<UserTrailerInteractio
 
 @Repository
 interface UserPostInteractionRepository : JpaRepository<UserPostInteraction, Long> {
-    @Query("SELECT u FROM UserPostInteraction u WHERE u.userId.userId = :userId")
+    @Query("SELECT u FROM UserPostInteraction u WHERE u.user.userId = :userId")
     fun findByUserUserId(@Param("userId") userId: Int): List<UserPostInteraction>
 
-    @Query("SELECT u FROM UserPostInteraction u WHERE u.userId.userId = :userId AND u.post.postId = :postId")
+    @Query("SELECT u FROM UserPostInteraction u WHERE u.user.userId = :userId AND u.post.postId = :postId")
     fun findByUserUserIdAndPostPostId(@Param("userId") userId: Int, @Param("postId") postId: Int): UserPostInteraction?
 
-    @Query("SELECT DISTINCT u.post.postId FROM UserPostInteraction u WHERE u.userId.userId = :userId AND u.likeState = true ORDER BY u.timestamp DESC")
+    @Query("SELECT DISTINCT u.post.postId FROM UserPostInteraction u WHERE u.user.userId = :userId AND u.likeState = true ORDER BY u.timestamp DESC")
     fun findLikedPostsByUserUserId(@Param("userId") userId: Int): List<Int>
 
-    @Query("SELECT DISTINCT u.post.postId FROM UserPostInteraction u WHERE u.userId.userId = :userId AND u.saveState = true ORDER BY u.timestamp DESC")
+    @Query("SELECT DISTINCT u.post.postId FROM UserPostInteraction u WHERE u.user.userId = :userId AND u.saveState = true ORDER BY u.timestamp DESC")
     fun findSavedPostsByUserUserId(@Param("userId") userId: Int): List<Int>
 
-    @Query("SELECT DISTINCT u.post.postId FROM UserPostInteraction u WHERE u.userId.userId = :userId AND u.commentMade = true ORDER BY u.timestamp DESC")
+    @Query("SELECT DISTINCT u.post.postId FROM UserPostInteraction u WHERE u.user.userId = :userId AND u.commentMade = true ORDER BY u.timestamp DESC")
     fun findCommentMadePostsByUserUserId(@Param("userId") userId: Int): List<Int>
 }
+
 
 @Repository
 interface PostRepository : JpaRepository<PostEntity, Int> {

@@ -39,4 +39,19 @@ data class CastEntity(
 
     @Column(name = "profile_path")
     val profilePath: String?
-)
+) {
+    // Default constructor for JPA
+    constructor() : this(
+        id = null,
+        postId = 0,
+        personId = 0,
+        name = "",
+        gender = 0,
+        knownForDepartment = "",
+        character = "",
+        episodeCount = 0,
+        orderIndex = 0,
+        popularity = BigDecimal.ZERO,
+        profilePath = null
+    )
+}

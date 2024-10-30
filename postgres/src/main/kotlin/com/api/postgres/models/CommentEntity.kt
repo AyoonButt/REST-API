@@ -3,8 +3,6 @@ package com.api.postgres.models
 
 import jakarta.persistence.*
 
-
-
 @Entity
 @Table(name = "comments")
 data class CommentEntity(
@@ -29,4 +27,14 @@ data class CommentEntity(
 
     @Column(name = "timestamp", length = 75)
     val timestamp: String
-)
+) {
+    // Default constructor for JPA
+    constructor() : this(
+        commentId = null,
+        user = UserEntity(), // Assuming a no-argument constructor in UserEntity
+        post = PostEntity(), // Assuming a no-argument constructor in PostEntity
+        content = "",
+        sentiment = "",
+        timestamp = ""
+    )
+}

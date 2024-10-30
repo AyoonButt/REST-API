@@ -39,4 +39,19 @@ data class CrewEntity(
 
     @Column(name = "profile_path")
     val profilePath: String?
-)
+) {
+    // Default constructor for JPA
+    constructor() : this(
+        id = null,
+        postId = 0,
+        personId = 0,
+        name = "",
+        gender = 0,
+        knownForDepartment = "",
+        job = "",
+        department = "",
+        episodeCount = 0,
+        popularity = BigDecimal.ZERO,
+        profilePath = null
+    )
+}
