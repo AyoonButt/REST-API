@@ -39,7 +39,7 @@ class Credits(
                         character = roles.optString("character", ""),
                         episodeCount = roles.optInt("episode_count", 0),
                         orderIndex = castMember.optInt("order", -1),
-                        popularity = castMember.optDouble("popularity", 0.0).toBigDecimal(),
+                        popularity = castMember.optDouble("popularity", 0.0),
                         profilePath = castMember.optString("profile_path", null)
                     )
                 )

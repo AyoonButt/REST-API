@@ -3,18 +3,33 @@ package com.api.postgres.repositories
 import com.api.postgres.models.*
 import org.springframework.data.domain.Pageable
 
+
 import org.springframework.data.jpa.repository.JpaRepository  // Import JpaRepository
 import org.springframework.data.jpa.repository.Query  // Import for @Query annotation
 import org.springframework.data.repository.query.Param  // Import for @Param annotation
 import org.springframework.stereotype.Repository  // Import for @Repository annotation
-
-
+import org.springframework.data.domain.Page
 
 
 @Repository
 interface CommentRepository : JpaRepository<CommentEntity, Int> {
     fun findByPostPostId(postId: Int): List<CommentEntity>
+
+    @Query("SELECT c FROM CommentEntity c WHERE c.parentComment.commentId = :parentCommentId")
+    fun findAllReplies(@Param("parentCommentId") parentCommentId: Int, pageable: Pageable): Page<CommentEntity>
+
+    @Query("SELECT c FROM CommentEntity c WHERE c.parentComment.commentId = :parentCommentId AND c.user.userId = :userId")
+    fun findReplies(
+        @Param("parentCommentId") parentCommentId: Int,
+        @Param("userId") userId: Int,
+        pageable: Pageable
+    ): Page<CommentEntity>
 }
+
+
+
+
+
 
 @Repository
 interface UserTrailerInteractionRepository : JpaRepository<UserTrailerInteraction, Int> {

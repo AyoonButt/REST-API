@@ -73,4 +73,9 @@ class Posts(
     suspend fun getPaginatedPostsAPI(limit: Int, offset: Int): List<PostEntity> {
         return fetchPostsFromDatabase(limit, offset)
     }
+
+    @Transactional(readOnly = true)
+    fun getPostById(postId: Int): PostEntity? {
+        return postRepository.findById(postId).orElse(null)
+    }
 }

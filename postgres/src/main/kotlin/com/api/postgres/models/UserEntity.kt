@@ -11,40 +11,40 @@ data class UserEntity(
     val userId: Int? = null,
 
     @Column(name = "name", nullable = false, length = 255)
-    val name: String,
+    var name: String,
 
     @Column(name = "username", nullable = false, unique = true, length = 255)
-    val username: String,
+    var username: String,
 
     @Column(name = "email", nullable = false, length = 255)
-    val email: String,
+    var email: String,
 
     @Column(name = "pswd", nullable = false, length = 255)
-    val password: String,
+    var password: String,
 
     @Column(name = "language", nullable = false, length = 50)
-    val language: String,
+    var language: String,
 
     @Column(name = "region", nullable = false, length = 50)
-    val region: String,
+    var region: String,
 
     @Column(name = "min_movie")
-    val minMovie: Int,
+    var minMovie: Int,
 
     @Column(name = "max_movie")
-    val maxMovie: Int,
+    var maxMovie: Int,
 
     @Column(name = "min_tv")
-    val minTV: Int,
+    var minTV: Int,
 
     @Column(name = "max_tv")
-    val maxTV: Int,
+    var maxTV: Int,
 
     @Column(name = "oldest_date", length = 50)
-    val oldestDate: String,
+    var oldestDate: String,
 
     @Column(name = "recent_date", length = 50)
-    val recentDate: String,
+    var recentDate: String,
 
     @Column(name = "recent_login", length = 75)
     var recentLogin: String,

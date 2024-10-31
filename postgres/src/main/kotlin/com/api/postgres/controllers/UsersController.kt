@@ -3,6 +3,7 @@ package com.api.postgres.controllers
 import com.api.postgres.UserInfo
 import com.api.postgres.UserParams
 import com.api.postgres.UserRequest
+import com.api.postgres.UserUpdateRequest
 import com.api.postgres.services.UsersService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.HttpStatus
@@ -64,5 +65,25 @@ class UsersController @Autowired constructor(
     fun getUserInfo(@PathVariable userId: Int): ResponseEntity<UserInfo?> {
         val userInfo = usersService.getUserInfo(userId)
         return ResponseEntity(userInfo, if (userInfo != null) HttpStatus.OK else HttpStatus.NOT_FOUND)
+    }
+
+    // Update user information including subscriptions, genres, and avoided genres
+    @PutMapping("/{userId}")
+    fun updateUser(
+        @PathVariable userId: Int,
+        @RequestBody userUpdateRequest: UserUpdateRequest
+    ): ResponseEntity<String> {
+        return try {
+            usersService.updateUser(
+                userId,
+                userUpdateRequest.userData,
+                userUpdateRequest.subscriptions,
+                userUpdateRequest.genres,
+                userUpdateRequest.avoidGenres
+            )
+            ResponseEntity.ok("User information updated successfully")
+        } catch (e: Exception) {
+            ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.message)
+        }
     }
 }

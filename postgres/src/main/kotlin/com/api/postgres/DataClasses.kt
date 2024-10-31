@@ -40,5 +40,17 @@ data class UserRequest(
     val genres: List<Int>,
     var avoidGenres: List<Int>
 )
+data class UserUpdateRequest(
+    val userData: UserEntity,  // The user entity with updated information
+    val subscriptions: List<Int>,  // List of subscription provider IDs
+    val genres: List<Int>,  // List of genre IDs
+    val avoidGenres: List<Int>  // List of avoided genre IDs
+)
+
+data class ReplyRequest(
+    val postId: Int,
+    val content: String,
+    val sentiment: String? = null
+)
 
 

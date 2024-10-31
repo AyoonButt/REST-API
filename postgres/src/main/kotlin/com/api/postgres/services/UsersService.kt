@@ -1,7 +1,5 @@
 package com.api.postgres.services
 
-
-
 import com.api.postgres.UserInfo
 import com.api.postgres.UserParams
 import com.api.postgres.models.*
@@ -103,6 +101,102 @@ class UsersService @Autowired constructor(
     }
 
 
+    @Transactional
+    fun updateUser(
+        userId: Int,
+        userData: UserEntity,
+        subscriptions: List<Int>,
+        genres: List<Int>,
+        avoidGenres: List<Int>
+    ) {
+        // Fetch the existing user
+        val existingUser = userRepository.findById(userId)
+            .orElseThrow { IllegalArgumentException("User with ID $userId not found") }
+
+        // Update user details if changes are detected
+        existingUser.apply {
+            name = userData.name.takeIf { it != this.name } ?: this.name
+            username = userData.username.takeIf { it != this.username } ?: this.username
+            email = userData.email.takeIf { it != this.email } ?: this.email
+            password = userData.password.takeIf { it != this.password } ?: this.password
+            language = userData.language.takeIf { it != this.language } ?: this.language
+            region = userData.region.takeIf { it != this.region } ?: this.region
+            minMovie = userData.minMovie.takeIf { it != this.minMovie } ?: this.minMovie
+            maxMovie = userData.maxMovie.takeIf { it != this.maxMovie } ?: this.maxMovie
+            minTV = userData.minTV.takeIf { it != this.minTV } ?: this.minTV
+            maxTV = userData.maxTV.takeIf { it != this.maxTV } ?: this.maxTV
+            oldestDate = userData.oldestDate.takeIf { it != this.oldestDate } ?: this.oldestDate
+            recentDate = userData.recentDate.takeIf { it != this.recentDate } ?: this.recentDate
+            recentLogin = userData.recentLogin.takeIf { it != this.recentLogin } ?: this.recentLogin
+        }
+
+        // Save updated user entity
+        userRepository.save(existingUser)
+
+        // Update user subscriptions
+        val existingSubscriptions = userSubscriptionRepository.findByIdUserId(userId).map { it.id.providerId }
+        val subscriptionsToAdd = subscriptions.filterNot { existingSubscriptions.contains(it) }
+        val subscriptionsToRemove = existingSubscriptions.filterNot { subscriptions.contains(it) }
+
+        // Add new subscriptions
+        subscriptionsToAdd.forEach { providerId ->
+            val newSubscription = UserSubscription(
+                id = UserSubscriptionId(userId, providerId),
+                priority = 1,
+                user = existingUser
+            )
+            userSubscriptionRepository.save(newSubscription)
+        }
+
+        // Remove subscriptions that are no longer present
+        subscriptionsToRemove.forEach { providerId ->
+            userSubscriptionRepository.deleteById(UserSubscriptionId(userId, providerId))
+        }
+
+        // Update user genres
+        val existingGenres = userGenreRepository.findByIdUserId(userId).map { it.id.genreId }
+        val genresToAdd = genres.filterNot { existingGenres.contains(it) }
+        val genresToRemove = existingGenres.filterNot { genres.contains(it) }
+
+        genresToAdd.forEach { genreId ->
+            val genre = genreRepository.findById(genreId)
+                .orElseThrow { IllegalArgumentException("Genre with ID $genreId not found") }
+            val newUserGenre = UserGenres(
+                id = UserGenreId(userId, genreId),
+                user = existingUser,
+                genre = genre
+            )
+            userGenreRepository.save(newUserGenre)
+        }
+
+        genresToRemove.forEach { genreId ->
+            userGenreRepository.deleteById(UserGenreId(userId, genreId))
+        }
+
+        // Update avoided genres
+        val existingAvoidGenres = userAvoidGenreRepository.findByIdUserId(userId).map { it.id.genreId }
+        val avoidGenresToAdd = avoidGenres.filterNot { existingAvoidGenres.contains(it) }
+        val avoidGenresToRemove = existingAvoidGenres.filterNot { avoidGenres.contains(it) }
+
+        avoidGenresToAdd.forEach { avoidGenreId ->
+            val genre = genreRepository.findById(avoidGenreId)
+                .orElseThrow { IllegalArgumentException("Genre with ID $avoidGenreId not found") }
+            val newUserAvoidGenre = UserAvoidGenres(
+                id = UserAvoidGenreId(userId, avoidGenreId),
+                user = existingUser,
+                genre = genre
+            )
+            userAvoidGenreRepository.save(newUserAvoidGenre)
+        }
+
+        avoidGenresToRemove.forEach { avoidGenreId ->
+            userAvoidGenreRepository.deleteById(UserAvoidGenreId(userId, avoidGenreId))
+        }
+    }
+
+
+
+
 
     // Transactional function to check user credentials
     @Transactional
@@ -165,6 +259,11 @@ class UsersService @Autowired constructor(
             genres = genres,
             avoidGenres = avoidGenres
         )
+    }
+
+    @Transactional(readOnly = true)
+    fun getUserById(userId: Int): UserEntity? {
+        return userRepository.findById(userId).orElse(null)
     }
 }
 

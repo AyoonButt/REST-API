@@ -35,7 +35,7 @@ data class CastEntity(
     val orderIndex: Int,
 
     @Column(name = "popularity")
-    val popularity: BigDecimal,
+    val popularity: Double,
 
     @Column(name = "profile_path")
     val profilePath: String?
@@ -51,7 +51,7 @@ data class CastEntity(
         character = "",
         episodeCount = 0,
         orderIndex = 0,
-        popularity = BigDecimal.ZERO,
+        popularity = 0.0,
         profilePath = null
     )
 }

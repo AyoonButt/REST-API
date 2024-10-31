@@ -1,6 +1,5 @@
 package com.api.postgres.models
 
-
 import jakarta.persistence.*
 
 @Entity
@@ -12,29 +11,35 @@ data class CommentEntity(
     val commentId: Int? = null,
 
     @ManyToOne
-    @JoinColumn(name = "user_id")
+    @JoinColumn(name = "user_id", nullable = false)
     val user: UserEntity,
 
     @ManyToOne
-    @JoinColumn(name = "post_id")
+    @JoinColumn(name = "post_id", nullable = false)
     val post: PostEntity,
 
     @Column(name = "content", nullable = false)
     val content: String,
 
     @Column(name = "sentiment", length = 50)
-    val sentiment: String,
+    val sentiment: String? = null,
 
     @Column(name = "timestamp", length = 75)
-    val timestamp: String
+    val timestamp: String? = null,
+
+    @ManyToOne
+    @JoinColumn(name = "parent_comment_id")
+    var parentComment: CommentEntity? = null,
+
+    @OneToMany(mappedBy = "parentComment", cascade = [CascadeType.ALL], fetch = FetchType.LAZY)
+    val replies: List<CommentEntity> = listOf()
 ) {
-    // Default constructor for JPA
     constructor() : this(
         commentId = null,
-        user = UserEntity(), // Assuming a no-argument constructor in UserEntity
-        post = PostEntity(), // Assuming a no-argument constructor in PostEntity
+        user = UserEntity(),  // Ensure UserEntity and PostEntity have default constructors
+        post = PostEntity(),
         content = "",
-        sentiment = "",
-        timestamp = ""
+        sentiment = null,
+        timestamp = null
     )
 }
