@@ -4,6 +4,7 @@ import com.api.postgres.UserInfo
 import com.api.postgres.UserParams
 import com.api.postgres.UserRequest
 import com.api.postgres.UserUpdateRequest
+import com.api.postgres.models.UserEntity
 import com.api.postgres.services.UsersService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.HttpStatus
@@ -16,6 +17,11 @@ import java.time.LocalDateTime
 class UsersController @Autowired constructor(
     private val usersService: UsersService
 ) {
+    @GetMapping("/username")
+    fun getUserByUsername(@RequestParam username: String): ResponseEntity<UserEntity?> {
+        val userEntity = usersService.getUserByUsername(username)
+        return ResponseEntity(userEntity, if (userEntity != null) HttpStatus.OK else HttpStatus.NOT_FOUND)
+    }
 
     // Endpoint to create a new user with subscriptions and genres
     @PostMapping("/add")
@@ -86,4 +92,11 @@ class UsersController @Autowired constructor(
             ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.message)
         }
     }
+
+    @GetMapping("/users/{userId}/providers")
+    fun getProvidersByPriority(@PathVariable userId: Int): List<Int> {
+
+        return usersService.getProvidersByPriority(userId)
+    }
+
 }

@@ -36,10 +36,11 @@ data class UserParams(
 
 data class UserRequest(
     val user: UserEntity,
-    val subscriptions: List<Int>,
-    val genres: List<Int>,
-    var avoidGenres: List<Int>
+    val subscriptions: List<Int> = emptyList(),
+    val genres: List<Int> = emptyList(),
+    var avoidGenres: List<Int> = emptyList()
 )
+
 data class UserUpdateRequest(
     val userData: UserEntity,  // The user entity with updated information
     val subscriptions: List<Int>,  // List of subscription provider IDs

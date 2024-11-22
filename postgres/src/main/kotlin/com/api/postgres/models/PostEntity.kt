@@ -17,7 +17,7 @@ data class PostEntity(
     var postLikeCount: Int,
 
     @Column(name = "trailer_like_count")
-    val trailerLikeCount: Int,
+    var trailerLikeCount: Int,
 
     @Column(name = "type", length = 50)
     val type: String,

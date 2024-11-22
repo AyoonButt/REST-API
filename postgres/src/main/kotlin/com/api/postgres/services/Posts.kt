@@ -59,6 +59,15 @@ class Posts(
         postRepository.save(post)
     }
 
+    @Transactional
+    fun updateTrailerLikeCount(postId: Int) {
+        val post = postRepository.findById(postId).orElseThrow {
+            IllegalArgumentException("Post with ID $postId not found")
+        }
+        post.trailerLikeCount += 1
+        postRepository.save(post)
+    }
+
     // Fetch videos from the database
     @Transactional
     fun fetchVideosFromDatabase(limit: Int, offset: Int): List<Pair<String, Int>> {
@@ -78,4 +87,15 @@ class Posts(
     fun getPostById(postId: Int): PostEntity? {
         return postRepository.findById(postId).orElse(null)
     }
+
+    @Transactional(readOnly = true)
+    fun fetchPostEntityById(postId: Int): PostEntity? {
+        return postRepository.findPostById(postId)
+    }
+
+    fun getPostIdByTmdbId(tmdbId: Int): Int? {
+        return postRepository.findPostIdByTmdbId(tmdbId)
+    }
+
+
 }

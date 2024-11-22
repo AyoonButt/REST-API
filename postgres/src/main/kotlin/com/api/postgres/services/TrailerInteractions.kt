@@ -13,7 +13,7 @@ class TrailerInteractions(
 ) {
 
     @Transactional
-    suspend fun updateInteractionTimestamp(postId: Int, timestamp: Long) {
+    suspend fun updateInteractionTimestamp(postId: Int, timestamp: String) {
         val interaction = userTrailerInteractionRepository.findById(postId).orElse(null)
         if (interaction != null) {
             val updatedInteraction = interaction.copy(timestamp = timestamp.toString())

@@ -2,6 +2,8 @@ package com.api.postgres.services
 
 import com.api.postgres.models.GenreEntity
 import com.api.postgres.repositories.GenreRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -57,6 +59,7 @@ class Genres(private val genreRepository: GenreRepository) {
         }
     }
 
+    @Transactional
     fun filterGenres(query: String): List<GenreEntity> {
         return if (query.isNotEmpty()) {
             genreRepository.findByGenreNameContainingIgnoreCase(query).take(5)
@@ -65,6 +68,7 @@ class Genres(private val genreRepository: GenreRepository) {
         }
     }
 
+    @Transactional
     fun filterAvoidGenres(query: String): List<GenreEntity> {
         return filterGenres(query) // Reusing filterGenres, modify if needed
     }
@@ -74,4 +78,20 @@ class Genres(private val genreRepository: GenreRepository) {
         genreRepository.save(genre)
         genresCache.add(genre)
     }
+
+    // Function to fetch provider IDs based on provider names
+    @Transactional
+    suspend fun fetchGenreIdsByNames(names: List<String>): List<Int> {
+        return withContext(Dispatchers.IO) {
+            // Fetch all genre IDs based on the provided names
+            val genreIds = genreRepository.findAllGenreIdsByNames(names)
+
+            // Ensure that the order matches the input list
+            names.mapNotNull { name ->
+                // Find the corresponding genre ID based on the name
+                genreIds.find { it.toString() == name } // You may need to adjust this depending on the structure of the response
+            }
+        }
+    }
+
 }

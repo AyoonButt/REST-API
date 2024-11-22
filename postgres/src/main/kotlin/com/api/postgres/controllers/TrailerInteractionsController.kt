@@ -16,7 +16,7 @@ class TrailerInteractionsController(private val trailerInteractions: TrailerInte
     @PutMapping("/{postId}/timestamp")
     fun updateInteractionTimestamp(
         @PathVariable postId: Int,
-        @RequestParam timestamp: Long
+        @RequestParam timestamp: String
     ): ResponseEntity<String> = runBlocking {
         trailerInteractions.updateInteractionTimestamp(postId, timestamp)
         ResponseEntity.ok("Timestamp updated successfully for postId: $postId")

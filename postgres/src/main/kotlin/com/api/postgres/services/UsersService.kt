@@ -9,6 +9,7 @@ import com.api.postgres.repositories.UserGenresRepository
 import com.api.postgres.repositories.UserRepository
 import com.api.postgres.repositories.UserSubscriptionRepository
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.data.domain.Sort
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDateTime
@@ -100,7 +101,6 @@ class UsersService @Autowired constructor(
         return savedUser.userId ?: throw IllegalStateException("User ID cannot be null")
     }
 
-
     @Transactional
     fun updateUser(
         userId: Int,
@@ -138,11 +138,15 @@ class UsersService @Autowired constructor(
         val subscriptionsToAdd = subscriptions.filterNot { existingSubscriptions.contains(it) }
         val subscriptionsToRemove = existingSubscriptions.filterNot { subscriptions.contains(it) }
 
-        // Add new subscriptions
+        // Add new subscriptions with incremented priority
         subscriptionsToAdd.forEach { providerId ->
+            // Find the current highest priority value
+            val currentMaxPriority = userSubscriptionRepository.findMaxPriorityByUserId(userId) ?: 0
+            val newPriority = currentMaxPriority + 1
+
             val newSubscription = UserSubscription(
                 id = UserSubscriptionId(userId, providerId),
-                priority = 1,
+                priority = newPriority,
                 user = existingUser
             )
             userSubscriptionRepository.save(newSubscription)
@@ -193,6 +197,7 @@ class UsersService @Autowired constructor(
             userAvoidGenreRepository.deleteById(UserAvoidGenreId(userId, avoidGenreId))
         }
     }
+
 
 
 
@@ -265,5 +270,19 @@ class UsersService @Autowired constructor(
     fun getUserById(userId: Int): UserEntity? {
         return userRepository.findById(userId).orElse(null)
     }
+
+    @Transactional(readOnly = true)
+    fun getUserByUsername(username: String): UserEntity? {
+        return userRepository.findByUsername(username) // Implement this method in UserRepository
+    }
+
+    @Transactional
+    fun getProvidersByPriority(userId: Int): List<Int> {
+        // Call the repository function to get the provider IDs sorted by priority
+        return userSubscriptionRepository.findProviderIdsByUserIdSortedByPriority(userId)
+    }
+
+
+
 }
 

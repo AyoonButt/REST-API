@@ -47,4 +47,16 @@ class GenresController(
         genresService.insertGenres()
         return ResponseEntity.status(HttpStatus.CREATED).body("Default genres inserted successfully")
     }
+
+    @GetMapping("/ids")
+    suspend fun getProviderIdsByNames(
+        @RequestParam names: List<String> // Accept a list of provider names
+    ): ResponseEntity<List<Int>> {
+        val genreIds = genresService.fetchGenreIdsByNames(names)
+        return if (genreIds.isNotEmpty()) {
+            ResponseEntity.ok(genreIds)
+        } else {
+            ResponseEntity.notFound().build()
+        }
+    }
 }

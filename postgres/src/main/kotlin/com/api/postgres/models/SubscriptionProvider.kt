@@ -17,4 +17,5 @@ data class SubscriptionProvider(
         providerId = null, // Default value for providerId
         providerName = "" // Provide a default empty string for providerName
     )
+
 }

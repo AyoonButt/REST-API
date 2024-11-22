@@ -24,16 +24,26 @@ class ProvidersController(
         }
     }
 
-    // Endpoint to fetch providers with pagination
-    @GetMapping("/list")
-    fun getPaginatedProviders(
-        @RequestParam limit: Int,
-        @RequestParam offset: Int
-    ): ResponseEntity<List<SubscriptionProvider>> {
+    // Endpoint to fetch all providers without pagination
+    @GetMapping("/list/")
+    fun getAllProviders(): ResponseEntity<List<SubscriptionProvider>> {
         return runBlocking {
-            val providers = providersService.fetchProvidersFromDatabase(limit, offset)
+            val providers = providersService.fetchProvidersFromDatabase()
             ResponseEntity.ok(providers)
         }
     }
+
+    @GetMapping("/ids")
+    suspend fun getProviderIdsByNames(
+        @RequestParam names: List<String> // Accept a list of provider names
+    ): ResponseEntity<List<Int>> {
+        val providerIds = providersService.fetchProviderIdsByNames(names)
+        return if (providerIds.isNotEmpty()) {
+            ResponseEntity.ok(providerIds)
+        } else {
+            ResponseEntity.notFound().build()
+        }
+    }
+
 }
 

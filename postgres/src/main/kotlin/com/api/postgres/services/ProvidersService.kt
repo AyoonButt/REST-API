@@ -26,12 +26,28 @@ class ProvidersService @Autowired constructor(
     }
 
     @Transactional
-    // Suspend function to fetch providers from the database
-    suspend fun fetchProvidersFromDatabase(limit: Int, offset: Int): List<SubscriptionProvider> {
+// Suspend function to fetch all providers from the database without pagination
+    suspend fun fetchProvidersFromDatabase(): List<SubscriptionProvider> {
         return withContext(Dispatchers.IO) {
-            providerRepository.findAllWithLimitAndOffset(limit, offset) // Assuming a method exists in the repository
+            providerRepository.findAll().toList() // Assuming a method exists in the repository to fetch all records
         }
     }
+
+
+    // Function to fetch provider IDs based on provider names
+    @Transactional
+    suspend fun fetchProviderIdsByNames(names: List<String>): List<Int> {
+        return withContext(Dispatchers.IO) {
+            val providerIds = providerRepository.findAllProviderIdsByNames(names)
+
+            // Ensure that the order matches the input list, assuming you have provider names
+            names.mapNotNull { name ->
+                // Check if provider name is in providerIds list, assuming it's a string conversion
+                providerIds.find { it.toString() == name } // convert providerId to string for comparison
+            }
+        }
+    }
+
 
 
 }
