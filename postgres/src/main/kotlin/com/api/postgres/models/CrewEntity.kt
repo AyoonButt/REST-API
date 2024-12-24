@@ -1,7 +1,8 @@
 package com.api.postgres.models
 
 import jakarta.persistence.*
-import java.math.BigDecimal
+import java.util.Optional
+
 
 @Entity
 @Table(name = "crew")
@@ -10,8 +11,9 @@ data class CrewEntity(
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Int? = null,
 
-    @Column(name = "post_id")
-    val postId: Int,
+    @ManyToOne
+    @JoinColumn(name = "tmdb_id", referencedColumnName = "tmdb_id")  // Foreign key mapping
+    val post: PostEntity? = null,
 
     @Column(name = "person_id")
     val personId: Int,
@@ -35,15 +37,14 @@ data class CrewEntity(
     val episodeCount: Int,
 
     @Column(name = "popularity")
-    val popularity: BigDecimal,
+    val popularity: Double,
 
     @Column(name = "profile_path")
     val profilePath: String?
 ) {
-    // Default constructor for JPA
     constructor() : this(
         id = null,
-        postId = 0,
+        post = PostEntity(),
         personId = 0,
         name = "",
         gender = 0,
@@ -51,7 +52,7 @@ data class CrewEntity(
         job = "",
         department = "",
         episodeCount = 0,
-        popularity = BigDecimal.ZERO,
+        popularity = 0.0,
         profilePath = null
     )
 }

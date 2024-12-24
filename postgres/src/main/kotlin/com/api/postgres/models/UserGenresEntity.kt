@@ -17,13 +17,17 @@ data class UserGenres(
     @ManyToOne
     @MapsId("genreId") // Maps the genreId part of the composite key
     @JoinColumn(name = "genre_id", referencedColumnName = "genre_id")
-    val genre: GenreEntity // Assuming GenreEntity exists
+    val genre: GenreEntity, // Assuming GenreEntity exists
+
+    @Column(name = "priority")
+    val priority: Int
 ) {
     // Default constructor for JPA
     constructor() : this(
         id = UserGenreId(0, 0), // Default values for composite key
         user = UserEntity(), // Initializes with a default UserEntity
-        genre = GenreEntity() // Initializes with a default GenreEntity
+        genre = GenreEntity(), // Initializes with a default GenreEntity
+        priority = 0
     )
 }
 

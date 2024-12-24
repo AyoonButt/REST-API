@@ -9,19 +9,25 @@ data class UserSubscription(
     @EmbeddedId
     val id: UserSubscriptionId,
 
-    @Column(name = "priority")
+    @Column(name = "priority", nullable = false)
     val priority: Int,
 
     @ManyToOne(fetch = FetchType.LAZY)
     @MapsId("userId")  // Maps the userId in the embedded key
     @JoinColumn(name = "user_id", referencedColumnName = "user_id")
-    val user: UserEntity  // Foreign key relationship to UserEntity
+    val user: UserEntity,  // Foreign key relationship to UserEntity
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @MapsId("providerId")  // Maps the providerId in the embedded key
+    @JoinColumn(name = "provider_id", referencedColumnName = "provider_id")
+    val provider: SubscriptionProvider // Foreign key relationship to SubscriptionProvider
 ) {
     // Default constructor for JPA
     constructor() : this(
         id = UserSubscriptionId(0, 0), // Default values for the embedded key
         priority = 0,                  // Default priority value
-        user = UserEntity()            // Default UserEntity
+        user = UserEntity(),           // Default UserEntity
+        provider = SubscriptionProvider() // Default SubscriptionProvider
     )
 }
 
@@ -36,4 +42,3 @@ data class UserSubscriptionId(
     // Default constructor for JPA
     constructor() : this(0, 0) // Default values for the embedded ID
 }
-

@@ -4,12 +4,12 @@ import com.api.postgres.UserInfo
 import com.api.postgres.UserParams
 import com.api.postgres.models.*
 import com.api.postgres.repositories.GenreRepository
+import com.api.postgres.repositories.ProviderRepository
 import com.api.postgres.repositories.UserAvoidGenresRepository
 import com.api.postgres.repositories.UserGenresRepository
 import com.api.postgres.repositories.UserRepository
 import com.api.postgres.repositories.UserSubscriptionRepository
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.data.domain.Sort
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDateTime
@@ -21,6 +21,8 @@ class UsersService @Autowired constructor(
     private val userGenreRepository: UserGenresRepository,
     private val userAvoidGenreRepository: UserAvoidGenresRepository,
     private val genreRepository: GenreRepository,
+    private val providerRepository: ProviderRepository,
+
 
 ) {
     // Transactional function to add a new user with subscriptions and genres provided as parameters
@@ -37,7 +39,7 @@ class UsersService @Autowired constructor(
             email = userData.email,
             password = userData.password,
             language = userData.language, // Language provided directly
-            region = userData.region ?: "Default", // Default if not provided
+            region = userData.region, // Default if not provided
             minMovie = userData.minMovie,
             maxMovie = userData.maxMovie,
             minTV = userData.minTV,
@@ -52,38 +54,45 @@ class UsersService @Autowired constructor(
         val savedUser = userRepository.save(user)
 
         // Insert user subscriptions
-        subscriptions.forEach { providerId ->
+        subscriptions.forEachIndexed { index, providerId ->
             val userSubscription = UserSubscription(
                 id = UserSubscriptionId(
                     userId = savedUser.userId ?: throw IllegalStateException("User ID cannot be null"),
                     providerId = providerId
                 ),
-                priority = 1, // Set default priority or customize as needed
-                user = savedUser
+                priority = index + 1, // Assigning priority based on the order in the list
+                user = savedUser,
+                provider = providerRepository.findById(providerId)
+                    .orElseThrow { IllegalArgumentException("Provider with ID $providerId not found") }
             )
             userSubscriptionRepository.save(userSubscription)
         }
 
-        // Insert user genres from the provided list
+        // Insert user genres from the provided list with incremented priority
         genres.forEach { genreId ->
-            // Retrieve the GenreEntity using the genreId
             val genre = genreRepository.findById(genreId)
                 .orElseThrow { IllegalArgumentException("Genre with ID $genreId not found") }
 
-            val userGenre = UserGenres(
+            // Find the current highest priority for the user
+            val currentMaxPriority =
+                userGenreRepository.findMaxPriorityByUserId(savedUser.userId!!)
+
+            val newUserGenre = UserGenres(
                 id = UserGenreId(
-                    userId = savedUser.userId ?: throw IllegalStateException("User ID cannot be null"),
+                    userId = savedUser.userId,
                     genreId = genreId
                 ),
-                user = savedUser, // Setting the relationship with the user entity
-                genre = genre // Set the valid GenreEntity
+                user = savedUser,
+                genre = genre,
+                priority = currentMaxPriority + 1 // Increment priority
             )
-            userGenreRepository.save(userGenre)
+
+            userGenreRepository.save(newUserGenre)
         }
+
 
         // Insert avoided genres from the provided list
         avoidGenres.forEach { avoidGenreId ->
-            // Similar logic for avoided genres if necessary
             val avoidGenre = genreRepository.findById(avoidGenreId)
                 .orElseThrow { IllegalArgumentException("Genre with ID $avoidGenreId not found") }
 
@@ -92,14 +101,15 @@ class UsersService @Autowired constructor(
                     userId = savedUser.userId ?: throw IllegalStateException("User ID cannot be null"),
                     genreId = avoidGenreId
                 ),
-                user = savedUser, // Setting the relationship with the user entity
-                genre = avoidGenre // Set the valid GenreEntity for avoided genres
+                user = savedUser,
+                genre = avoidGenre,
             )
             userAvoidGenreRepository.save(userAvoidGenre)
         }
 
         return savedUser.userId ?: throw IllegalStateException("User ID cannot be null")
     }
+
 
     @Transactional
     fun updateUser(
@@ -138,21 +148,20 @@ class UsersService @Autowired constructor(
         val subscriptionsToAdd = subscriptions.filterNot { existingSubscriptions.contains(it) }
         val subscriptionsToRemove = existingSubscriptions.filterNot { subscriptions.contains(it) }
 
-        // Add new subscriptions with incremented priority
         subscriptionsToAdd.forEach { providerId ->
-            // Find the current highest priority value
-            val currentMaxPriority = userSubscriptionRepository.findMaxPriorityByUserId(userId) ?: 0
+            val currentMaxPriority = userSubscriptionRepository.findMaxPriorityByUserId(userId)
             val newPriority = currentMaxPriority + 1
-
+            val provider = providerRepository.findById(providerId)
+                .orElseThrow { IllegalArgumentException("Provider with ID $providerId not found") }
             val newSubscription = UserSubscription(
                 id = UserSubscriptionId(userId, providerId),
                 priority = newPriority,
-                user = existingUser
+                user = existingUser,
+                provider = provider
             )
             userSubscriptionRepository.save(newSubscription)
         }
 
-        // Remove subscriptions that are no longer present
         subscriptionsToRemove.forEach { providerId ->
             userSubscriptionRepository.deleteById(UserSubscriptionId(userId, providerId))
         }
@@ -165,13 +174,20 @@ class UsersService @Autowired constructor(
         genresToAdd.forEach { genreId ->
             val genre = genreRepository.findById(genreId)
                 .orElseThrow { IllegalArgumentException("Genre with ID $genreId not found") }
+
+            // Find the current highest priority for the user
+            val currentMaxPriority = userGenreRepository.findMaxPriorityByUserId(userId)
+
             val newUserGenre = UserGenres(
                 id = UserGenreId(userId, genreId),
                 user = existingUser,
-                genre = genre
+                genre = genre,
+                priority = currentMaxPriority + 1 // Increment priority for the new genre
             )
+
             userGenreRepository.save(newUserGenre)
         }
+
 
         genresToRemove.forEach { genreId ->
             userGenreRepository.deleteById(UserGenreId(userId, genreId))
@@ -188,7 +204,7 @@ class UsersService @Autowired constructor(
             val newUserAvoidGenre = UserAvoidGenres(
                 id = UserAvoidGenreId(userId, avoidGenreId),
                 user = existingUser,
-                genre = genre
+                genre = genre,
             )
             userAvoidGenreRepository.save(newUserAvoidGenre)
         }
@@ -197,7 +213,6 @@ class UsersService @Autowired constructor(
             userAvoidGenreRepository.deleteById(UserAvoidGenreId(userId, avoidGenreId))
         }
     }
-
 
 
 
@@ -278,8 +293,18 @@ class UsersService @Autowired constructor(
 
     @Transactional
     fun getProvidersByPriority(userId: Int): List<Int> {
-        // Call the repository function to get the provider IDs sorted by priority
-        return userSubscriptionRepository.findProviderIdsByUserIdSortedByPriority(userId)
+        try {
+            val providerIds = userSubscriptionRepository.findProviderIdsByUserIdSortedByPriority(userId)
+            if (providerIds.isEmpty()) {
+                throw Exception("No providers found for user with ID $userId")
+            }
+            return providerIds
+        } catch (e: Exception) {
+            // Log additional details
+            println("Error fetching providers for user $userId: ${e.message}")
+            throw Exception("Failed to fetch provider IDs by priority: ${e.message}", e)
+        }
+
     }
 
 

@@ -1,17 +1,17 @@
 package com.api.postgres.models
 
 import jakarta.persistence.*
-import java.math.BigDecimal
 
 @Entity
-@Table(name = "cast")
+@Table(name = "cast_members")
 data class CastEntity(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Int? = null,
 
-    @Column(name = "post_id")
-    val postId: Int,
+    @ManyToOne
+    @JoinColumn(name = "tmdb_id", referencedColumnName = "tmdb_id")  // Foreign key mapping
+    val post: PostEntity? = null,
 
     @Column(name = "person_id")
     val personId: Int,
@@ -40,10 +40,9 @@ data class CastEntity(
     @Column(name = "profile_path")
     val profilePath: String?
 ) {
-    // Default constructor for JPA
     constructor() : this(
         id = null,
-        postId = 0,
+        post = null,  // Initialize with null
         personId = 0,
         name = "",
         gender = 0,

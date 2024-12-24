@@ -70,12 +70,12 @@ interface PostRepository : JpaRepository<PostEntity, Int> {
 
 @Repository
 interface CastRepository : JpaRepository<CastEntity, Int> {
-    fun findByPostId(postId: Int): List<CastEntity>
+    fun findByPostPostId(postId: Int): List<CastEntity>
 }
 
 @Repository
 interface CrewRepository : JpaRepository<CrewEntity, Int> {
-    fun findByPostId(postId: Int): List<CrewEntity>
+    fun findByPostPostId(postId: Int): List<CrewEntity>
 }
 
 
@@ -83,17 +83,35 @@ interface CrewRepository : JpaRepository<CrewEntity, Int> {
 interface GenreRepository : JpaRepository<GenreEntity, Int> {
     fun findByGenreNameContainingIgnoreCase(query: String): List<GenreEntity>
 
-    @Query("SELECT g.genreId FROM GenreEntity g WHERE g.genreName IN :names")
-    fun findAllGenreIdsByNames(@Param("names") names: List<String>): List<Int>
+    @Query("SELECT g FROM GenreEntity g WHERE g.genreName IN :names")
+    fun findAllGenreIdsByNames(@Param("names") names: List<String>): List<GenreEntity>
+
+    @Query("SELECT g FROM GenreEntity g WHERE g.genreId = :genreId")
+    fun findByGenreId(@Param("genreId") genreId: Int): GenreEntity?
+
 }
 
 
 interface ProviderRepository : JpaRepository<SubscriptionProvider, Int> {
-    @Query("SELECT p.providerId FROM SubscriptionProvider p WHERE p.providerName IN :names")
-    fun findAllProviderIdsByNames(@Param("names") names: List<String>): List<Int>
+
+    @Query("SELECT p FROM SubscriptionProvider p WHERE p.providerName IN :names")
+    fun findAllProviderIdsByNames(@Param("names") names: List<String>): List<SubscriptionProvider>
+
+    fun findByProviderNameContainingIgnoreCase(query: String): List<SubscriptionProvider>
+
+    @Query("SELECT p FROM SubscriptionProvider p WHERE p.providerId = :providerId")
+    fun findByProviderId(@Param("providerId") providerId: Int): SubscriptionProvider?
 }
 
+@Repository
+interface PostGenresRepository : JpaRepository<PostGenres, PostGenreId> {
 
+}
+
+@Repository
+interface PostSubscriptionsRepository : JpaRepository<PostSubscriptions, PostSubscriptionId> {
+
+}
 
 @Repository
 interface UserRepository : JpaRepository<UserEntity, Int> {
@@ -110,6 +128,10 @@ interface UserRepository : JpaRepository<UserEntity, Int> {
 
 @Repository
 interface UserGenresRepository : JpaRepository<UserGenres, UserGenreId> {
+    @Query("SELECT COALESCE(MAX(ug.priority), 0) FROM UserGenres ug WHERE ug.user.userId = :userId")
+    fun findMaxPriorityByUserId(@Param("userId") userId: Int): Int
+
+
     // Retrieve all genre IDs for a specific user
     fun findByIdUserId(userId: Int): List<UserGenres>
 }
@@ -117,7 +139,7 @@ interface UserGenresRepository : JpaRepository<UserGenres, UserGenreId> {
 @Repository
 interface UserAvoidGenresRepository : JpaRepository<UserAvoidGenres, UserAvoidGenreId> {
     // Retrieve all genre IDs for a specific user
-    fun findByIdUserId(userId: Int): List<UserGenres>
+    fun findByIdUserId(userId: Int): List<UserAvoidGenres>
 }
 
 @Repository
@@ -125,12 +147,12 @@ interface UserSubscriptionRepository : JpaRepository<UserSubscription, UserSubsc
     // Retrieve all provider IDs for a specific user
     fun findByIdUserId(userId: Int): List<UserSubscription>
 
-    @Query("SELECT MAX(us.priority) FROM UserSubscription us WHERE us.user.id = :userId")
+    @Query("SELECT COALESCE(MAX(us.priority), 0) FROM UserSubscription us WHERE us.user.userId = :userId")
     fun findMaxPriorityByUserId(@Param("userId") userId: Int): Int
 
 
     // Custom query with ORDER BY for sorting by priority in descending order
-    @Query("SELECT us.id.providerId FROM UserSubscription us WHERE us.user.userId = :userId ORDER BY us.priority DESC")
+    @Query("SELECT us.id.providerId FROM UserSubscription us WHERE us.user.userId = :userId ORDER BY us.priority ASC")
     fun findProviderIdsByUserIdSortedByPriority(@Param("userId") userId: Int): List<Int>
 
 }

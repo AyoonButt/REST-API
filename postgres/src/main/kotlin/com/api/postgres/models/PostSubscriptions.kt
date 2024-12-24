@@ -17,20 +17,20 @@ data class PostSubscriptions(
     @ManyToOne
     @MapsId("providerId") // Maps the providerId part of the composite key
     @JoinColumn(name = "provider_id", referencedColumnName = "provider_id")
-    val provider: SubscriptionProvider // Assuming SubscriptionProvider exists
+    val subscription: SubscriptionProvider // Assuming SubscriptionProvider exists
 ) {
     // Default constructor for JPA
     constructor() : this(
         id = PostSubscriptionId(0, 0), // Provide default values for the composite key
         post = PostEntity(), // Create a default instance of PostEntity (ensure it has a no-arg constructor)
-        provider = SubscriptionProvider() // Create a default instance of SubscriptionProvider (ensure it has a no-arg constructor)
+        subscription = SubscriptionProvider() // Create a default instance of SubscriptionProvider (ensure it has a no-arg constructor)
     )
 }
 
 @Embeddable
 data class PostSubscriptionId(
     @Column(name = "post_id")
-    val postId: Int,
+    val postId: Int?,
 
     @Column(name = "provider_id")
     val providerId: Int

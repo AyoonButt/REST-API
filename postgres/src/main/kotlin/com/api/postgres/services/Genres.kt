@@ -79,19 +79,31 @@ class Genres(private val genreRepository: GenreRepository) {
         genresCache.add(genre)
     }
 
-    // Function to fetch provider IDs based on provider names
     @Transactional
     suspend fun fetchGenreIdsByNames(names: List<String>): List<Int> {
         return withContext(Dispatchers.IO) {
-            // Fetch all genre IDs based on the provided names
-            val genreIds = genreRepository.findAllGenreIdsByNames(names)
+            if (names.isEmpty()) {
+                return@withContext emptyList()
+            }
 
-            // Ensure that the order matches the input list
+            // Fetch genre entities from the database
+            val genres = genreRepository.findAllGenreIdsByNames(names)
+
+            // Create a map of genre names to IDs
+            val genreNameToIdMap = genres.associateBy(
+                keySelector = { it.genreName.lowercase() },
+                valueTransform = { it.genreId }
+            )
+
+            // Map input names to IDs, maintaining order and handling case-insensitivity
             names.mapNotNull { name ->
-                // Find the corresponding genre ID based on the name
-                genreIds.find { it.toString() == name } // You may need to adjust this depending on the structure of the response
+                genreNameToIdMap[name.lowercase()]
             }
         }
     }
+
+
+
+
 
 }

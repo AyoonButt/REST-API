@@ -1,6 +1,7 @@
 package com.api.postgres.services
 
 
+import com.api.postgres.models.GenreEntity
 import com.api.postgres.models.SubscriptionProvider
 import com.api.postgres.repositories.ProviderRepository
 import org.springframework.beans.factory.annotation.Autowired
@@ -26,6 +27,15 @@ class ProvidersService @Autowired constructor(
     }
 
     @Transactional
+    fun filterProviders(query: String): List<SubscriptionProvider> {
+        return if (query.isNotEmpty()) {
+            providerRepository.findByProviderNameContainingIgnoreCase(query).take(5)
+        } else {
+            emptyList()
+        }
+    }
+
+    @Transactional
 // Suspend function to fetch all providers from the database without pagination
     suspend fun fetchProvidersFromDatabase(): List<SubscriptionProvider> {
         return withContext(Dispatchers.IO) {
@@ -34,19 +44,30 @@ class ProvidersService @Autowired constructor(
     }
 
 
-    // Function to fetch provider IDs based on provider names
-    @Transactional
+    @Transactional(readOnly = true)
     suspend fun fetchProviderIdsByNames(names: List<String>): List<Int> {
         return withContext(Dispatchers.IO) {
-            val providerIds = providerRepository.findAllProviderIdsByNames(names)
+            if (names.isEmpty()) {
+                return@withContext emptyList()
+            }
 
-            // Ensure that the order matches the input list, assuming you have provider names
+            // Fetch provider entities from the database
+            val providers = providerRepository.findAllProviderIdsByNames(names)
+
+            // Create a map of provider names to IDs
+            val providerNameToIdMap = providers.associateBy(
+                keySelector = { it.providerName},
+                valueTransform = { it.providerId }
+            )
+
+            // Map input names to IDs, maintaining order and handling case-insensitivity
             names.mapNotNull { name ->
-                // Check if provider name is in providerIds list, assuming it's a string conversion
-                providerIds.find { it.toString() == name } // convert providerId to string for comparison
+                providerNameToIdMap[name]
             }
         }
     }
+
+
 
 
 
