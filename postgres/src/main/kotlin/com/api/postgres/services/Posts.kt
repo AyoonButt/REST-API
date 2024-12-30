@@ -1,153 +1,144 @@
 package com.api.postgres.services
 
 
+import com.api.postgres.CommentDto
+import com.api.postgres.CommentProjection
+import com.api.postgres.PostDto
+import com.api.postgres.PostProjection
 import com.api.postgres.models.PostEntity
-import com.api.postgres.models.PostGenreId
-import com.api.postgres.models.PostGenres
-import com.api.postgres.models.PostSubscriptionId
-import com.api.postgres.models.PostSubscriptions
-import com.api.postgres.repositories.GenreRepository
 import com.api.postgres.repositories.PostGenresRepository
 import com.api.postgres.repositories.PostRepository
 import com.api.postgres.repositories.PostSubscriptionsRepository
-import com.api.postgres.repositories.ProviderRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 
 @Service
 class Posts(
     private val postRepository: PostRepository,
     private val postGenresRepository: PostGenresRepository,
     private val postSubscriptionsRepository: PostSubscriptionsRepository,
-    private val genreRepository: GenreRepository,
-    private val providerRepository: ProviderRepository
 
 ) {
 
-    // Function to insert posts into the database
+    private val logger: Logger = LoggerFactory.getLogger(Posts::class.java)
+
+    private fun PostProjection.toDto() = PostDto(
+        postId = postId,
+        tmdbId = tmdbId,
+        type = type,
+        title = title,
+        subscription = subscription,
+        releaseDate = releaseDate,
+        overview = overview,
+        posterPath = posterPath,
+        voteAverage = voteAverage,
+        voteCount = voteCount,
+        originalLanguage = originalLanguage,
+        originalTitle = originalTitle,
+        popularity = popularity,
+        genreIds = genreIds,
+        postLikeCount = postLikeCount,
+        trailerLikeCount = trailerLikeCount,
+        videoKey = videoKey
+    )
+
     @Transactional
     suspend fun addPostsToDatabase(
         mediaType: String,
-        dataList: List<PostEntity>,
+        dataList: List<PostDto>,
         providerId: Int
     ) {
         withContext(Dispatchers.IO) {
             dataList.forEach { data ->
-                // Create and save the post
-                val post = PostEntity(
+                // Insert post
+                val savedPost = postRepository.save(PostEntity(
                     tmdbId = data.tmdbId,
                     type = mediaType,
                     title = data.title,
                     subscription = providerId.toString(),
-                    releaseDate = data.releaseDate,
-                    overview = data.overview,
-                    posterPath = data.posterPath,
+                    releaseDate = data.releaseDate.toString(),
+                    overview = data.overview.toString(),
+                    posterPath = data.posterPath.toString(),
                     voteAverage = data.voteAverage,
                     voteCount = data.voteCount,
-                    originalLanguage = data.originalLanguage,
-                    originalTitle = data.originalTitle,
+                    originalLanguage = data.originalLanguage.toString(),
+                    originalTitle = data.originalTitle.toString(),
                     popularity = data.popularity,
                     genreIds = data.genreIds,
                     postLikeCount = data.postLikeCount,
                     trailerLikeCount = data.trailerLikeCount,
                     videoKey = data.videoKey
-                )
-                val savedPost = postRepository.save(post)
+                ))
 
-                // Update PostGenres table
-                val genreIds = data.genreIds.split(",").mapNotNull { it.trim().toIntOrNull() }
-                genreIds.forEach { genreId ->
-                    val genreEntity = genreRepository.findByGenreId(genreId)  // Assuming GenreEntity has a method like this
-                    if (genreEntity != null) {
-                        val postGenre = PostGenres(
-                            id = PostGenreId(
-                                postId = savedPost.postId,
-                                genreId = genreId
-                            ),
-                            post = savedPost,
-                            genre = genreEntity
-                        )
-                        postGenresRepository.save(postGenre)
+                // Insert genre relationships
+                data.genreIds.split(",")
+                    .mapNotNull { it.trim().toIntOrNull() }
+                    .forEach { genreId ->
+                        postGenresRepository.insertPostGenre(savedPost.postId!!, genreId)
                     }
-                }
 
-                // Update PostSubscriptions table
-                val subscriptionProvider = providerRepository.findByProviderId(providerId)  // Fetch the provider
-                if (subscriptionProvider != null) {
-                    val postSubscription = PostSubscriptions(
-                        id = PostSubscriptionId(
-                            postId = savedPost.postId,
-                            providerId = providerId
-                        ),
-                        post = savedPost,
-                        subscription = subscriptionProvider
-                    )
-                    postSubscriptionsRepository.save(postSubscription)
-                }
+                // Insert subscription relationship
+                postSubscriptionsRepository.insertPostSubscription(savedPost.postId!!, providerId)
             }
+        }
+    }
+
+    @Transactional(readOnly = true)
+    suspend fun fetchPostsFromDatabase(
+        limit: Int,
+        offset: Int
+    ): List<PostDto> = withContext(Dispatchers.IO) {
+        try {
+            postRepository.findAllDtosByOrderByPostId(limit, offset)
+                .map { it.toDto() }
+        } catch (e: Exception) {
+            logger.error("Error fetching posts: ${e.message}")
+            emptyList()
         }
     }
 
 
 
-    // Suspend function to fetch posts from the database
     @Transactional
-    suspend fun fetchPostsFromDatabase(limit: Int, offset: Int): List<PostEntity> {
+    suspend fun updateLikeCount(postId: Int) {
+        withContext(Dispatchers.IO) {
+            postRepository.incrementPostLikeCount(postId)
+        }
+    }
+
+    @Transactional
+    suspend fun updateTrailerLikeCount(postId: Int) {
+        withContext(Dispatchers.IO) {
+            postRepository.incrementTrailerLikeCount(postId)
+        }
+    }
+
+    @Transactional(readOnly = true)
+    suspend fun fetchVideosFromDatabase(limit: Int, offset: Int): List<Pair<String, Int>> {
         return withContext(Dispatchers.IO) {
-            postRepository.findAllByOrderByPostId(limit, offset)
+            postRepository.findAllDtosByOrderByPostId(limit, offset)
+                .map { Pair(it.videoKey, it.postId ?: -1) }
         }
     }
 
-    // Update like count for a post
-    @Transactional
-    fun updateLikeCount(postId: Int) {
-        val post = postRepository.findById(postId).orElseThrow { Exception("Post not found") }
-        // Assuming postLikeCount is an Int field in Post
-        post.postLikeCount = post.postLikeCount + 1
-        postRepository.save(post)
-    }
-
-    @Transactional
-    fun updateTrailerLikeCount(postId: Int) {
-        val post = postRepository.findById(postId).orElseThrow {
-            IllegalArgumentException("Post with ID $postId not found")
+    @Transactional(readOnly = true)
+    suspend fun getPostById(postId: Int): PostDto? = withContext(Dispatchers.IO) {
+        try {
+            postRepository.findDtoById(postId)?.toDto()
+        } catch (e: Exception) {
+            logger.error("Error fetching post $postId: ${e.message}")
+            null
         }
-        post.trailerLikeCount += 1
-        postRepository.save(post)
-    }
-
-    // Fetch videos from the database
-    @Transactional
-    fun fetchVideosFromDatabase(limit: Int, offset: Int): List<Pair<String, Int>> {
-        return postRepository.findAllByOrderByPostId(limit, offset)
-            .map { post ->
-                Pair(post.videoKey, post.postId ?: -1)
-            }
-    }
-
-    //get posts with pagination
-    @Transactional
-    suspend fun getPaginatedPostsAPI(limit: Int, offset: Int): List<PostEntity> {
-        return fetchPostsFromDatabase(limit, offset)
     }
 
     @Transactional(readOnly = true)
-    fun getPostById(postId: Int): PostEntity? {
-        return postRepository.findById(postId).orElse(null)
+    suspend fun getPostIdByTmdbId(tmdbId: Int): Int? {
+        return withContext(Dispatchers.IO) {
+            postRepository.findPostIdByTmdbId(tmdbId)
+        }
     }
-
-    @Transactional(readOnly = true)
-    fun fetchPostEntityById(postId: Int): PostEntity? {
-        return postRepository.findPostById(postId)
-    }
-
-    @Transactional(readOnly = true)
-    fun getPostIdByTmdbId(tmdbId: Int): Int? {
-        return postRepository.findPostIdByTmdbId(tmdbId)
-    }
-
-
 }

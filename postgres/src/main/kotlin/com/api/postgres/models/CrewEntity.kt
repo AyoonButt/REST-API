@@ -1,10 +1,12 @@
 package com.api.postgres.models
 
 import jakarta.persistence.*
+import org.hibernate.annotations.DynamicUpdate
 import java.util.Optional
 
 
 @Entity
+@DynamicUpdate
 @Table(name = "crew")
 data class CrewEntity(
     @Id

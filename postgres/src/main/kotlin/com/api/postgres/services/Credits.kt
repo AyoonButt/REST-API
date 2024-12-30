@@ -1,10 +1,10 @@
 package com.api.postgres.services
 
 
-
-import com.api.postgres.models.CastEntity
-import com.api.postgres.models.CrewEntity
-import com.api.postgres.models.PostEntity
+import com.api.postgres.CastDto
+import com.api.postgres.CastProjection
+import com.api.postgres.CrewDto
+import com.api.postgres.CrewProjection
 import com.api.postgres.repositories.CastRepository
 import com.api.postgres.repositories.CrewRepository
 import com.api.postgres.repositories.PostRepository
@@ -16,33 +16,49 @@ import org.json.JSONObject
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
-
 @Service
 class Credits(
     private val castRepository: CastRepository,
     private val crewRepository: CrewRepository,
-    private val postRepository: PostRepository
 ) {
-
     private val logger: Logger = LoggerFactory.getLogger(Credits::class.java)
 
+    private fun CastProjection.toDto() = CastDto(
+        personId = personId,
+        name = name,
+        gender = gender,
+        knownForDepartment = knownForDepartment,
+        character = character,
+        episodeCount = episodeCount,
+        orderIndex = orderIndex,
+        popularity = popularity,
+        profilePath = profilePath
+    )
+
+    private fun CrewProjection.toDto() = CrewDto(
+        personId = personId,
+        name = name,
+        gender = gender,
+        knownForDepartment = knownForDepartment,
+        job = job,
+        department = department,
+        episodeCount = episodeCount,
+        popularity = popularity,
+        profilePath = profilePath
+    )
 
     @Transactional
     suspend fun parseAndInsertCredits(creditsResponse: JSONObject, tmdbId: Int) {
         withContext(Dispatchers.IO) {
             val creditsJson = creditsResponse
 
-            val postEntity: PostEntity? = postRepository.findById(tmdbId).orElse(null)
-
             // Parse and insert cast details
             val castArray = creditsJson.optJSONArray("cast")
             for (i in 0 until castArray.length()) {
                 val castMemberJson = castArray.getJSONObject(i)
 
-
-                // Create CastEntity
-                val castEntity = CastEntity(
-                    post = postEntity,
+                castRepository.insertCast(
+                    postId = tmdbId,
                     personId = castMemberJson.getInt("id"),
                     name = castMemberJson.getString("name"),
                     gender = castMemberJson.optInt("gender", -1),
@@ -53,12 +69,6 @@ class Credits(
                     popularity = castMemberJson.optDouble("popularity", 0.0),
                     profilePath = castMemberJson.optString("profile_path", "")
                 )
-
-                // Log CastEntity details before saving
-                logger.info("Cast Entity to insert: $castEntity")
-
-                // Save CastEntity
-                castRepository.save(castEntity)
             }
 
             // Parse and insert crew details
@@ -66,9 +76,8 @@ class Credits(
             for (i in 0 until crewArray.length()) {
                 val crewMemberJson = crewArray.getJSONObject(i)
 
-                // Create CrewEntity
-                val crewEntity = CrewEntity(
-                    post = postEntity,
+                crewRepository.insertCrew(
+                    postId = tmdbId,
                     personId = crewMemberJson.getInt("id"),
                     name = crewMemberJson.getString("name"),
                     gender = crewMemberJson.optInt("gender", -1),
@@ -79,56 +88,19 @@ class Credits(
                     popularity = crewMemberJson.optDouble("popularity", 0.0),
                     profilePath = crewMemberJson.optString("profile_path", "")
                 )
-
-                // Log CrewEntity details before saving
-                logger.info("Crew Entity to insert: $crewEntity")
-
-                // Save CrewEntity
-                crewRepository.save(crewEntity)
             }
         }
     }
 
-
-
-
-
-
-    // Function to load credits from the database
     @Transactional(readOnly = true)
-    suspend fun loadCreditsFromDatabase(postId: Int): Map<String, List<Map<String, Any?>>> {
-        val castList = withContext(Dispatchers.IO) {
-            castRepository.findByPostPostId(postId).map { cast ->
-                mapOf(
-                    "personId" to cast.personId,
-                    "name" to cast.name,
-                    "gender" to cast.gender,
-                    "knownForDepartment" to cast.knownForDepartment,
-                    "character" to cast.character,
-                    "episodeCount" to cast.episodeCount,
-                    "orderIndex" to cast.orderIndex,
-                    "popularity" to cast.popularity,
-                    "profilePath" to cast.profilePath
-                )
-            }
+    suspend fun loadCreditsFromDatabase(postId: Int): Map<String, List<Any>> {
+        return withContext(Dispatchers.IO) {
+            mapOf(
+                "cast" to castRepository.findDtosByPostId(postId),
+                "crew" to crewRepository.findDtosByPostId(postId)
+            )
         }
-
-        val crewList = withContext(Dispatchers.IO) {
-            crewRepository.findByPostPostId(postId).map { crew ->
-                mapOf(
-                    "personId" to crew.personId,
-                    "name" to crew.name,
-                    "gender" to crew.gender,
-                    "knownForDepartment" to crew.knownForDepartment,
-                    "job" to crew.job,
-                    "department" to crew.department,
-                    "episodeCount" to crew.episodeCount,
-                    "popularity" to crew.popularity,
-                    "profilePath" to crew.profilePath
-                )
-            }
-        }
-
-        return mapOf("cast" to castList, "crew" to crewList)
     }
+
+
 }

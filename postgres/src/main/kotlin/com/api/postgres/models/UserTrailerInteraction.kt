@@ -1,8 +1,10 @@
 package com.api.postgres.models
 
 import jakarta.persistence.*
+import org.hibernate.annotations.DynamicUpdate
 
 @Entity
+@DynamicUpdate
 @Table(name = "user_trailer_interactions")
 data class UserTrailerInteraction(
 

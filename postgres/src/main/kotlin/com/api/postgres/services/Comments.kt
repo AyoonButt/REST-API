@@ -1,12 +1,16 @@
 package com.api.postgres.services
 
 
-import com.api.postgres.models.CommentEntity
+import com.api.postgres.CommentDto
+import com.api.postgres.CommentProjection
+import com.api.postgres.controllers.CommentsController
 import com.api.postgres.repositories.CommentRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import org.springframework.data.domain.PageRequest
-import org.springframework.data.domain.Pageable
+import org.springframework.data.domain.Sort
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -16,50 +20,100 @@ class Comments(
     private val commentRepository: CommentRepository
 ) {
 
-    // Function to load comments from the database for a given postId
+    private fun CommentProjection.toDto() = CommentDto(
+        commentId = commentId,
+        userId = userId,
+        username = username,
+        postId = postId,
+        content = content,
+        sentiment = sentiment,
+        timestamp = timestamp,
+        parentCommentId = parentCommentId
+    )
+
+    private val logger: Logger = LoggerFactory.getLogger(Comments::class.java)
+
     @Transactional(readOnly = true)
-    suspend fun loadComments(postId: Int): List<CommentEntity> {
-        return withContext(Dispatchers.IO) {
-            commentRepository.findByPostPostId(postId)
+    suspend fun loadComments(
+        postId: Int,
+        limit: Int = 10,
+        offset: Int = 0
+    ): List<CommentDto> = withContext(Dispatchers.IO) {
+        try {
+            commentRepository.findCommentsByPostId(postId, limit, offset)
+                .map { it.toDto() }
+        } catch (e: Exception) {
+            logger.error("Error loading comments for post $postId: ${e.message}")
+            emptyList()
         }
     }
 
-    // Function to insert a new comment into the database
     @Transactional
-    suspend fun insertComment(newComment: CommentEntity) {
+    suspend fun insertComment(comment: CommentDto) {
         withContext(Dispatchers.IO) {
-            commentRepository.save(newComment)
+            commentRepository.insertComment(
+                userId = comment.userId,
+                postId = comment.postId,
+                content = comment.content,
+                sentiment = comment.sentiment,
+                timestamp = comment.timestamp
+            )
         }
     }
 
     @Transactional
-    fun addReplyToComment(commentId: Int, reply: CommentEntity): CommentEntity {
-        val parentComment = commentRepository.findById(commentId)
-            .orElseThrow { Exception("Parent comment not found") }
-
-        reply.parentComment = parentComment
-        return commentRepository.save(reply)
+    suspend fun addReplyToComment(commentId: Int, reply: CommentDto) {
+        withContext(Dispatchers.IO) {
+            commentRepository.insertReply(
+                parentCommentId = commentId,
+                userId = reply.userId,
+                postId = reply.postId,
+                content = reply.content,
+                sentiment = reply.sentiment,
+                timestamp = reply.timestamp
+            )
+        }
     }
 
     @Transactional(readOnly = true)
-    fun findAllReplies(parentCommentId: Int, limit: Int = 10, offset: Int = 0): List<CommentEntity> {
-        val pageable: Pageable = PageRequest.of(offset / limit, limit)
-        return commentRepository.findAllReplies(parentCommentId, pageable).content // Fetch the content of the page
+    suspend fun findAllReplies(
+        parentCommentId: Int,
+        limit: Int = 10,
+        offset: Int = 0
+    ): List<CommentDto> = withContext(Dispatchers.IO) {
+        try {
+            commentRepository.findRepliesByParentId(parentCommentId, limit, offset)
+                .map { it.toDto() }
+        } catch (e: Exception) {
+            logger.error("Error finding replies for parent comment $parentCommentId: ${e.message}")
+            emptyList()
+        }
     }
 
     @Transactional(readOnly = true)
-    fun findReplies(parentCommentId: Int, userId: Int, limit: Int = 10, offset: Int = 0): List<CommentEntity> {
-        val pageable: Pageable = PageRequest.of(offset / limit, limit)
-        return commentRepository.findReplies(parentCommentId, userId, pageable).content // Fetch the content of the page
+    suspend fun findReplies(
+        parentCommentId: Int,
+        userId: Int,
+        limit: Int = 10,
+        offset: Int = 0
+    ): List<CommentDto> = withContext(Dispatchers.IO) {
+        try {
+            commentRepository.findRepliesByParentIdAndUserId(
+                parentCommentId,
+                userId,
+                limit,
+                offset
+            ).map { it.toDto() }
+        } catch (e: Exception) {
+            logger.error("Error finding replies for parent comment $parentCommentId and user $userId: ${e.message}")
+            emptyList()
+        }
     }
-
 
     @Transactional(readOnly = true)
-    fun getCommentById(commentId: Int): CommentEntity? {
-        return commentRepository.findById(commentId).orElse(null)
+    suspend fun getParentCommentUsername(commentId: Int): String? {
+        return withContext(Dispatchers.IO) {
+            commentRepository.findParentCommentUsername(commentId)
+        }
     }
-
-
-
-
 }

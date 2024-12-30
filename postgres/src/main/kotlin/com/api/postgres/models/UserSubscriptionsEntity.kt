@@ -1,9 +1,11 @@
 package com.api.postgres.models
 
 import jakarta.persistence.*
+import org.hibernate.annotations.DynamicUpdate
 import java.io.Serializable
 
 @Entity
+@DynamicUpdate
 @Table(name = "user_subscriptions")
 data class UserSubscription(
     @EmbeddedId

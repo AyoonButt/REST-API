@@ -1,7 +1,6 @@
 package com.api.postgres.services
 
 
-import com.api.postgres.models.GenreEntity
 import com.api.postgres.models.SubscriptionProvider
 import com.api.postgres.repositories.ProviderRepository
 import org.springframework.beans.factory.annotation.Autowired
@@ -66,9 +65,5 @@ class ProvidersService @Autowired constructor(
             }
         }
     }
-
-
-
-
 
 }

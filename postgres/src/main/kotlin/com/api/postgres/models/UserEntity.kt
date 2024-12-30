@@ -29,16 +29,16 @@ data class UserEntity(
     var region: String,
 
     @Column(name = "min_movie")
-    var minMovie: Int,
+    var minMovie: Int?,
 
     @Column(name = "max_movie")
-    var maxMovie: Int,
+    var maxMovie: Int?,
 
     @Column(name = "min_tv")
-    var minTV: Int,
+    var minTV: Int?,
 
     @Column(name = "max_tv")
-    var maxTV: Int,
+    var maxTV: Int?,
 
     @Column(name = "oldest_date", length = 50)
     var oldestDate: String,

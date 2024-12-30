@@ -1,12 +1,13 @@
 package com.api.postgres.controllers
 
-import com.api.postgres.models.UserPostInteraction
+import com.api.postgres.UserPostInteractionDto
 import com.api.postgres.services.PostInteractions
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
+
 
 @RestController
 @RequestMapping("/api/interactions")
@@ -17,16 +18,16 @@ class PostInteractionsController(
 
     // Endpoint to save interaction data for a post
     @PostMapping("/save")
-    fun saveInteractionData(@RequestBody interactionData: UserPostInteraction): ResponseEntity<String> {
-        logger.info("Saving interaction data for postId: ${interactionData.post} and userId: ${interactionData.user}")
+    suspend fun saveInteractionData(@RequestBody interactionData: UserPostInteractionDto): ResponseEntity<String> {
+        logger.info("Saving interaction data for postId: ${interactionData.postId} and userId: ${interactionData.userId}")
         postInteractionsService.saveInteractionData(interactionData)
-        logger.info("Interaction data saved successfully for postId: ${interactionData.post} and userId: ${interactionData.user}")
+        logger.info("Interaction data saved successfully for postId: ${interactionData.postId} and userId: ${interactionData.userId}")
         return ResponseEntity.status(HttpStatus.CREATED).body("Interaction data saved successfully")
     }
 
     // Endpoint to update the interaction timestamp for a post
     @PutMapping("/updateTimestamp")
-    fun updateInteractionTimestamp(
+    suspend fun updateInteractionTimestamp(
         @RequestParam postId: Int,
         @RequestParam userId: Int,
         @RequestParam timestamp: Long,
@@ -39,7 +40,7 @@ class PostInteractionsController(
 
     // Endpoint to get all post interactions for a user
     @GetMapping("/user/{userId}")
-    fun getPostInteractionsByUser(@PathVariable userId: Int): ResponseEntity<List<UserPostInteraction>> {
+    suspend fun getPostInteractionsByUser(@PathVariable userId: Int): ResponseEntity<List<UserPostInteractionDto>> {
         logger.info("Fetching post interactions for userId: $userId")
         val interactions = postInteractionsService.getPostInteractionsByUser(userId)
         return if (interactions.isNotEmpty()) {
@@ -53,10 +54,10 @@ class PostInteractionsController(
 
     // Endpoint to get a single post interaction for a user
     @GetMapping("/user/{userId}/post/{postId}")
-    fun getPostInteraction(
+    suspend fun getPostInteraction(
         @PathVariable userId: Int,
         @PathVariable postId: Int
-    ): ResponseEntity<UserPostInteraction> {
+    ): ResponseEntity<UserPostInteractionDto> {
         logger.info("Fetching interaction for userId: $userId and postId: $postId")
         val interaction = postInteractionsService.getPostInteraction(userId, postId)
         return interaction?.let {
@@ -70,7 +71,7 @@ class PostInteractionsController(
 
     // Endpoint to get all liked posts for a user
     @GetMapping("/liked/user/{userId}")
-    fun getLikedPosts(@PathVariable userId: Int): ResponseEntity<List<Int>> {
+    suspend fun getLikedPosts(@PathVariable userId: Int): ResponseEntity<List<Int>> {
         logger.info("Fetching liked posts for userId: $userId")
         val likedPosts = postInteractionsService.getLikedPosts(userId)
         return if (likedPosts.isNotEmpty()) {
@@ -84,7 +85,7 @@ class PostInteractionsController(
 
     // Endpoint to get all saved posts for a user
     @GetMapping("/saved/user/{userId}")
-    fun getSavedPosts(@PathVariable userId: Int): ResponseEntity<List<Int>> {
+    suspend fun getSavedPosts(@PathVariable userId: Int): ResponseEntity<List<Int>> {
         logger.info("Fetching saved posts for userId: $userId")
         val savedPosts = postInteractionsService.getSavedPosts(userId)
         return if (savedPosts.isNotEmpty()) {
@@ -98,7 +99,7 @@ class PostInteractionsController(
 
     // Endpoint to get all posts where a comment was made by a user
     @GetMapping("/commented/user/{userId}")
-    fun getCommentMadePosts(@PathVariable userId: Int): ResponseEntity<List<Int>> {
+    suspend fun getCommentMadePosts(@PathVariable userId: Int): ResponseEntity<List<Int>> {
         logger.info("Fetching posts with comments made by userId: $userId")
         val commentPosts = postInteractionsService.getCommentMadePosts(userId)
         return if (commentPosts.isNotEmpty()) {

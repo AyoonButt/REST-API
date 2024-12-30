@@ -1,10 +1,12 @@
 package com.api.postgres.services
 
-import com.api.postgres.UserInfo
-import com.api.postgres.UserParams
+import com.api.postgres.UserDto
+import com.api.postgres.UserPreferencesDto
+import com.api.postgres.UserPreferencesProjection
+import com.api.postgres.UserProjection
+
 import com.api.postgres.models.*
-import com.api.postgres.repositories.GenreRepository
-import com.api.postgres.repositories.ProviderRepository
+
 import com.api.postgres.repositories.UserAvoidGenresRepository
 import com.api.postgres.repositories.UserGenresRepository
 import com.api.postgres.repositories.UserRepository
@@ -13,301 +15,208 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDateTime
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlin.Int
+
 
 @Service
 class UsersService @Autowired constructor(
     private val userRepository: UserRepository,
     private val userSubscriptionRepository: UserSubscriptionRepository,
     private val userGenreRepository: UserGenresRepository,
-    private val userAvoidGenreRepository: UserAvoidGenresRepository,
-    private val genreRepository: GenreRepository,
-    private val providerRepository: ProviderRepository,
-
-
+    private val userAvoidGenreRepository: UserAvoidGenresRepository
 ) {
-    // Transactional function to add a new user with subscriptions and genres provided as parameters
+
+    private fun UserProjection.toDto() = UserDto(
+        userId = userId,
+        name = name,
+        username = username,
+        password = password,
+        email = email,
+        language = language.toString(),
+        region = region.toString(),
+        minMovie = minMovie,
+        maxMovie = maxMovie,
+        minTV = minTV,
+        maxTV = maxTV,
+        oldestDate = oldestDate.toString(),
+        recentDate = recentDate.toString(),
+        createdAt = createdAt.toString(),
+        recentLogin = recentLogin
+    )
+
+    private fun UserPreferencesProjection.toDto() = UserPreferencesDto(
+        userId = userId,
+        language = language,
+        region = region,
+        minMovie = minMovie,
+        maxMovie = maxMovie,
+        minTV = minTV,
+        maxTV = maxTV,
+        oldestDate = oldestDate,
+        recentDate = recentDate,
+        subscriptions = subscriptions,
+        genreIds = genreIds,
+        avoidGenreIds = avoidGenreIds
+    )
+
+
+
     @Transactional
-    fun addUser(
-        userData: UserEntity,
+    suspend fun addUser(
+        userDto: UserDto,
         subscriptions: List<Int>,
         genres: List<Int>,
         avoidGenres: List<Int>
-    ): Int {
-        val user = UserEntity(
-            name = userData.name,
-            username = userData.username,
-            email = userData.email,
-            password = userData.password,
-            language = userData.language, // Language provided directly
-            region = userData.region, // Default if not provided
-            minMovie = userData.minMovie,
-            maxMovie = userData.maxMovie,
-            minTV = userData.minTV,
-            maxTV = userData.maxTV,
-            oldestDate = userData.oldestDate,
-            recentDate = userData.recentDate,
-            createdAt = userData.createdAt,
-            recentLogin = userData.recentLogin
-        )
+    ): Int = withContext(Dispatchers.IO) {
+        // Insert user first
+        val user = userRepository.save(UserEntity(
+            name = userDto.name,
+            username = userDto.username,
+            email = userDto.email,
+            password = userDto.password,
+            language = userDto.language,
+            region = userDto.region,
+            minMovie = userDto.minMovie,
+            maxMovie = userDto.maxMovie,
+            minTV = userDto.minTV,
+            maxTV = userDto.maxTV,
+            oldestDate = userDto.oldestDate,
+            recentDate = userDto.recentDate,
+            createdAt = userDto.createdAt,
+            recentLogin = userDto.recentLogin.toString()
+        ))
 
-        // Save the user entity
-        val savedUser = userRepository.save(user)
-
-        // Insert user subscriptions
+        // Insert subscriptions with priorities
         subscriptions.forEachIndexed { index, providerId ->
-            val userSubscription = UserSubscription(
-                id = UserSubscriptionId(
-                    userId = savedUser.userId ?: throw IllegalStateException("User ID cannot be null"),
-                    providerId = providerId
-                ),
-                priority = index + 1, // Assigning priority based on the order in the list
-                user = savedUser,
-                provider = providerRepository.findById(providerId)
-                    .orElseThrow { IllegalArgumentException("Provider with ID $providerId not found") }
+            userSubscriptionRepository.insertUserSubscription(
+                userId = user.userId!!,
+                providerId = providerId,
+                priority = index + 1
             )
-            userSubscriptionRepository.save(userSubscription)
         }
 
-        // Insert user genres from the provided list with incremented priority
-        genres.forEach { genreId ->
-            val genre = genreRepository.findById(genreId)
-                .orElseThrow { IllegalArgumentException("Genre with ID $genreId not found") }
-
-            // Find the current highest priority for the user
-            val currentMaxPriority =
-                userGenreRepository.findMaxPriorityByUserId(savedUser.userId!!)
-
-            val newUserGenre = UserGenres(
-                id = UserGenreId(
-                    userId = savedUser.userId,
-                    genreId = genreId
-                ),
-                user = savedUser,
-                genre = genre,
-                priority = currentMaxPriority + 1 // Increment priority
+        // Insert genres with priorities
+        genres.forEachIndexed { index, genreId ->
+            userGenreRepository.insertUserGenre(
+                userId = user.userId!!,
+                genreId = genreId,
+                priority = index + 1
             )
-
-            userGenreRepository.save(newUserGenre)
         }
 
-
-        // Insert avoided genres from the provided list
-        avoidGenres.forEach { avoidGenreId ->
-            val avoidGenre = genreRepository.findById(avoidGenreId)
-                .orElseThrow { IllegalArgumentException("Genre with ID $avoidGenreId not found") }
-
-            val userAvoidGenre = UserAvoidGenres(
-                id = UserAvoidGenreId(
-                    userId = savedUser.userId ?: throw IllegalStateException("User ID cannot be null"),
-                    genreId = avoidGenreId
-                ),
-                user = savedUser,
-                genre = avoidGenre,
+        // Insert avoid genres
+        avoidGenres.forEach { genreId ->
+            userAvoidGenreRepository.insertUserAvoidGenre(
+                userId = user.userId!!,
+                genreId = genreId
             )
-            userAvoidGenreRepository.save(userAvoidGenre)
         }
 
-        return savedUser.userId ?: throw IllegalStateException("User ID cannot be null")
+        user.userId!!
     }
 
-
     @Transactional
-    fun updateUser(
+    suspend fun updateUser(
         userId: Int,
-        userData: UserEntity,
+        userDto: UserDto,
         subscriptions: List<Int>,
         genres: List<Int>,
         avoidGenres: List<Int>
-    ) {
-        // Fetch the existing user
-        val existingUser = userRepository.findById(userId)
-            .orElseThrow { IllegalArgumentException("User with ID $userId not found") }
+    ): Unit = withContext(Dispatchers.IO) {
+        // Update user basic info
+        userRepository.save(UserEntity(
+            userId = userId,
+            name = userDto.name,
+            username = userDto.username,
+            email = userDto.email,
+            password = userDto.password, // Added password
+            language = userDto.language,
+            region = userDto.region,
+            minMovie = userDto.minMovie,
+            maxMovie = userDto.maxMovie,
+            minTV = userDto.minTV,
+            maxTV = userDto.maxTV,
+            oldestDate = userDto.oldestDate,
+            recentDate = userDto.recentDate,
+            createdAt = userDto.createdAt,    // Added createdAt
+            recentLogin = userDto.recentLogin.toString() // Added recentLogin
+        ))
 
-        // Update user details if changes are detected
-        existingUser.apply {
-            name = userData.name.takeIf { it != this.name } ?: this.name
-            username = userData.username.takeIf { it != this.username } ?: this.username
-            email = userData.email.takeIf { it != this.email } ?: this.email
-            password = userData.password.takeIf { it != this.password } ?: this.password
-            language = userData.language.takeIf { it != this.language } ?: this.language
-            region = userData.region.takeIf { it != this.region } ?: this.region
-            minMovie = userData.minMovie.takeIf { it != this.minMovie } ?: this.minMovie
-            maxMovie = userData.maxMovie.takeIf { it != this.maxMovie } ?: this.maxMovie
-            minTV = userData.minTV.takeIf { it != this.minTV } ?: this.minTV
-            maxTV = userData.maxTV.takeIf { it != this.maxTV } ?: this.maxTV
-            oldestDate = userData.oldestDate.takeIf { it != this.oldestDate } ?: this.oldestDate
-            recentDate = userData.recentDate.takeIf { it != this.recentDate } ?: this.recentDate
-            recentLogin = userData.recentLogin.takeIf { it != this.recentLogin } ?: this.recentLogin
-        }
-
-        // Save updated user entity
-        userRepository.save(existingUser)
-
-        // Update user subscriptions
-        val existingSubscriptions = userSubscriptionRepository.findByIdUserId(userId).map { it.id.providerId }
-        val subscriptionsToAdd = subscriptions.filterNot { existingSubscriptions.contains(it) }
-        val subscriptionsToRemove = existingSubscriptions.filterNot { subscriptions.contains(it) }
-
-        subscriptionsToAdd.forEach { providerId ->
-            val currentMaxPriority = userSubscriptionRepository.findMaxPriorityByUserId(userId)
-            val newPriority = currentMaxPriority + 1
-            val provider = providerRepository.findById(providerId)
-                .orElseThrow { IllegalArgumentException("Provider with ID $providerId not found") }
-            val newSubscription = UserSubscription(
-                id = UserSubscriptionId(userId, providerId),
-                priority = newPriority,
-                user = existingUser,
-                provider = provider
-            )
-            userSubscriptionRepository.save(newSubscription)
-        }
+        // Update subscriptions
+        val currentSubscriptions = userSubscriptionRepository.findProviderIdsByUserIdSortedByPriority(userId)
+        val subscriptionsToAdd = subscriptions.filterNot { currentSubscriptions.contains(it) }
+        val subscriptionsToRemove = currentSubscriptions.filterNot { subscriptions.contains(it) }
 
         subscriptionsToRemove.forEach { providerId ->
             userSubscriptionRepository.deleteById(UserSubscriptionId(userId, providerId))
         }
 
-        // Update user genres
-        val existingGenres = userGenreRepository.findByIdUserId(userId).map { it.id.genreId }
-        val genresToAdd = genres.filterNot { existingGenres.contains(it) }
-        val genresToRemove = existingGenres.filterNot { genres.contains(it) }
-
-        genresToAdd.forEach { genreId ->
-            val genre = genreRepository.findById(genreId)
-                .orElseThrow { IllegalArgumentException("Genre with ID $genreId not found") }
-
-            // Find the current highest priority for the user
-            val currentMaxPriority = userGenreRepository.findMaxPriorityByUserId(userId)
-
-            val newUserGenre = UserGenres(
-                id = UserGenreId(userId, genreId),
-                user = existingUser,
-                genre = genre,
-                priority = currentMaxPriority + 1 // Increment priority for the new genre
-            )
-
-            userGenreRepository.save(newUserGenre)
+        subscriptionsToAdd.forEach { providerId ->
+            val priority = userSubscriptionRepository.findMaxPriorityByUserId(userId) + 1
+            userSubscriptionRepository.insertUserSubscription(userId, providerId, priority)
         }
 
+        // Update genres and avoid genres
+        updateGenres(userId, genres)
+        updateAvoidGenres(userId, avoidGenres)
+    }
+
+    private suspend fun updateGenres(userId: Int, newGenres: List<Int>) {
+        val currentGenres = userGenreRepository.findGenreIdsByUserId(userId)
+        val genresToAdd = newGenres.filterNot { currentGenres.contains(it) }
+        val genresToRemove = currentGenres.filterNot { newGenres.contains(it) }
 
         genresToRemove.forEach { genreId ->
             userGenreRepository.deleteById(UserGenreId(userId, genreId))
         }
 
-        // Update avoided genres
-        val existingAvoidGenres = userAvoidGenreRepository.findByIdUserId(userId).map { it.id.genreId }
-        val avoidGenresToAdd = avoidGenres.filterNot { existingAvoidGenres.contains(it) }
-        val avoidGenresToRemove = existingAvoidGenres.filterNot { avoidGenres.contains(it) }
-
-        avoidGenresToAdd.forEach { avoidGenreId ->
-            val genre = genreRepository.findById(avoidGenreId)
-                .orElseThrow { IllegalArgumentException("Genre with ID $avoidGenreId not found") }
-            val newUserAvoidGenre = UserAvoidGenres(
-                id = UserAvoidGenreId(userId, avoidGenreId),
-                user = existingUser,
-                genre = genre,
-            )
-            userAvoidGenreRepository.save(newUserAvoidGenre)
-        }
-
-        avoidGenresToRemove.forEach { avoidGenreId ->
-            userAvoidGenreRepository.deleteById(UserAvoidGenreId(userId, avoidGenreId))
+        genresToAdd.forEach { genreId ->
+            val priority = userGenreRepository.findMaxPriorityByUserId(userId) + 1
+            userGenreRepository.insertUserGenre(userId, genreId, priority)
         }
     }
 
+    private suspend fun updateAvoidGenres(userId: Int, newAvoidGenres: List<Int>) {
+        val currentAvoidGenres = userAvoidGenreRepository.findAvoidGenreIdsByUserId(userId)
+        val genresToAdd = newAvoidGenres.filterNot { currentAvoidGenres.contains(it) }
+        val genresToRemove = currentAvoidGenres.filterNot { newAvoidGenres.contains(it) }
 
+        genresToRemove.forEach { genreId ->
+            userAvoidGenreRepository.deleteById(UserAvoidGenreId(userId, genreId))
+        }
 
-
-
-    // Transactional function to check user credentials
-    @Transactional
-    fun checkUserCredentials(username: String, password: String): Boolean {
-        return userRepository.findByUsernameAndPassword(username, password) != null
-    }
-
-    // Transactional function to update the most recent login timestamp
-    @Transactional
-    fun updateRecentLogin(username: String, timestamp: LocalDateTime) {
-        val user = userRepository.findByUsernameAndPassword(username, "") ?: return
-        user.recentLogin = timestamp.toString() // Update with the passed timestamp
-        userRepository.save(user)
-    }
-
-    // Function to fetch user parameters (settings)
-    @Transactional
-    fun fetchUserParams(userId: Int): UserParams? {
-        return userRepository.fetchUserParams(userId)?.let {
-            UserParams(
-                language = it.language,
-                region = it.region,
-                minMovie = it.minMovie,
-                maxMovie = it.maxMovie,
-                minTV = it.minTV,
-                maxTV = it.maxTV,
-                oldestDate = it.oldestDate,
-                recentDate = it.recentDate
-            )
+        genresToAdd.forEach { genreId ->
+            userAvoidGenreRepository.insertUserAvoidGenre(userId, genreId)
         }
     }
 
     @Transactional(readOnly = true)
-    fun getUserInfo(userId: Int): UserInfo? {
-        val user = userRepository.fetchUserParams(userId) ?: return null
-
-        // Get user subscriptions directly from the repository
-        val subscriptions = userSubscriptionRepository.findByIdUserId(userId).map { it.id.providerId }
-
-        // Get user genres directly from the repository
-        val genres = userGenreRepository.findByIdUserId(userId).map { it.id.genreId }
-
-        val avoidGenres = userAvoidGenreRepository.findByIdUserId(userId).map { it.id.genreId }
-
-        return UserInfo(
-            userId = user.userId!!,
-            name = user.name,
-            username = user.username,
-            email = user.email,
-            language = user.language,
-            region = user.region,
-            minMovie = user.minMovie,
-            maxMovie = user.maxMovie,
-            minTV = user.minTV,
-            maxTV = user.maxTV,
-            oldestDate = user.oldestDate,
-            recentDate = user.recentDate,
-            createdAt = user.createdAt,
-            subscriptions = subscriptions,
-            genres = genres,
-            avoidGenres = avoidGenres
-        )
-    }
-
-    @Transactional(readOnly = true)
-    fun getUserById(userId: Int): UserEntity? {
-        return userRepository.findById(userId).orElse(null)
-    }
-
-    @Transactional(readOnly = true)
-    fun getUserByUsername(username: String): UserEntity? {
-        return userRepository.findByUsername(username) // Implement this method in UserRepository
+    suspend fun checkUserCredentials(username: String, password: String): Boolean {
+        return withContext(Dispatchers.IO) {
+            userRepository.findDtoByUsernameAndPassword(username, password) != null
+        }
     }
 
     @Transactional
-    fun getProvidersByPriority(userId: Int): List<Int> {
-        try {
-            val providerIds = userSubscriptionRepository.findProviderIdsByUserIdSortedByPriority(userId)
-            if (providerIds.isEmpty()) {
-                throw Exception("No providers found for user with ID $userId")
-            }
-            return providerIds
-        } catch (e: Exception) {
-            // Log additional details
-            println("Error fetching providers for user $userId: ${e.message}")
-            throw Exception("Failed to fetch provider IDs by priority: ${e.message}", e)
+    suspend fun updateRecentLogin(username: String, timestamp: LocalDateTime) {
+        withContext(Dispatchers.IO) {
+            userRepository.updateRecentLogin(username, timestamp.toString())
         }
-
     }
 
+    @Transactional(readOnly = true)
+    suspend fun getUserPreferences(userId: Int): UserPreferencesDto? {
+        return withContext(Dispatchers.IO) {
+            userRepository.findUserPreferencesById(userId)?.toDto()
+        }
+    }
 
-
+    @Transactional(readOnly = true)
+    suspend fun getProvidersByPriority(userId: Int): List<Int> {
+        return withContext(Dispatchers.IO) {
+            userSubscriptionRepository.findProviderIdsByUserIdSortedByPriority(userId)
+        }
+    }
 }
-
