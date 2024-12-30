@@ -102,8 +102,4 @@ class Genres(private val genreRepository: GenreRepository) {
         }
     }
 
-
-
-
-
 }

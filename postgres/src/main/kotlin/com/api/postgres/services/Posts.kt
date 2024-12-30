@@ -1,8 +1,6 @@
 package com.api.postgres.services
 
 
-import com.api.postgres.CommentDto
-import com.api.postgres.CommentProjection
 import com.api.postgres.PostDto
 import com.api.postgres.PostProjection
 import com.api.postgres.models.PostEntity

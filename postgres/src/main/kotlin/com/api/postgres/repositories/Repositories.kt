@@ -607,24 +607,22 @@ interface UserRepository : JpaRepository<UserEntity, Int> {
 
 
     @Query("""
-    SELECT new com.api.dto.UserPreferencesDto(
-        u.userId, 
-        u.language, 
-        u.region, 
-        u.minMovie, 
-        u.maxMovie,
-        u.minTV, 
-        u.maxTV, 
-        u.oldestDate, 
-        u.recentDate,
-        (SELECT us.id.providerId FROM UserSubscription us WHERE us.user.userId = u.userId),
-        (SELECT ug.id.genreId FROM UserGenres ug WHERE ug.user.userId = u.userId),
-        (SELECT avg.id.genreId FROM UserAvoidGenres avg WHERE avg.user.userId = u.userId)
-    )
+    SELECT u.userId as userId,
+           u.language as language,
+           u.region as region,
+           u.minMovie as minMovie,
+           u.maxMovie as maxMovie,
+           u.minTV as minTV,
+           u.maxTV as maxTV,
+           u.oldestDate as oldestDate,
+           u.recentDate as recentDate,
+           (SELECT us.id.providerId FROM UserSubscription us WHERE us.user.userId = u.userId) as subscriptions,
+           (SELECT ug.id.genreId FROM UserGenres ug WHERE ug.user.userId = u.userId) as genreIds,
+           (SELECT avg.id.genreId FROM UserAvoidGenres avg WHERE avg.user.userId = u.userId) as avoidGenreIds
     FROM UserEntity u
     WHERE u.userId = :userId
 """)
-    fun findUserPreferencesById(@Param("userId") userId: Int): UserPreferencesProjection?
+    fun findUserPreferencesById(userId: Int): UserPreferencesProjection?
 
     @Modifying
     @Query("UPDATE UserEntity u SET u.recentLogin = :timestamp WHERE u.username = :username")

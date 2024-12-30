@@ -1,8 +1,7 @@
 package com.api.postgres.services
 
 
-import com.api.postgres.PostDto
-import com.api.postgres.PostProjection
+
 import com.api.postgres.TrailerInteractionDto
 import com.api.postgres.TrailerInteractionProjection
 import com.api.postgres.repositories.UserTrailerInteractionRepository

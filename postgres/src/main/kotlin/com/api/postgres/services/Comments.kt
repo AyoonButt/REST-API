@@ -3,14 +3,11 @@ package com.api.postgres.services
 
 import com.api.postgres.CommentDto
 import com.api.postgres.CommentProjection
-import com.api.postgres.controllers.CommentsController
 import com.api.postgres.repositories.CommentRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import org.springframework.data.domain.PageRequest
-import org.springframework.data.domain.Sort
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 

@@ -7,7 +7,6 @@ import com.api.postgres.CrewDto
 import com.api.postgres.CrewProjection
 import com.api.postgres.repositories.CastRepository
 import com.api.postgres.repositories.CrewRepository
-import com.api.postgres.repositories.PostRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.springframework.stereotype.Service
