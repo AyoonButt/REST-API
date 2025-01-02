@@ -50,27 +50,17 @@ class Comments(
         withContext(Dispatchers.IO) {
             commentRepository.insertComment(
                 userId = comment.userId,
+                username = comment.username,
                 postId = comment.postId,
                 content = comment.content,
                 sentiment = comment.sentiment,
-                timestamp = comment.timestamp
+                timestamp = comment.timestamp,
+                parentCommentId = comment.parentCommentId,
             )
         }
     }
 
-    @Transactional
-    suspend fun addReplyToComment(commentId: Int, reply: CommentDto) {
-        withContext(Dispatchers.IO) {
-            commentRepository.insertReply(
-                parentCommentId = commentId,
-                userId = reply.userId,
-                postId = reply.postId,
-                content = reply.content,
-                sentiment = reply.sentiment,
-                timestamp = reply.timestamp
-            )
-        }
-    }
+
 
     @Transactional(readOnly = true)
     suspend fun findAllReplies(

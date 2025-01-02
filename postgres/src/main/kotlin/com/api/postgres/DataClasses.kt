@@ -31,10 +31,7 @@ data class CommentDto(
     @JsonProperty("sentiment") val sentiment: String?,
     @JsonProperty("timestamp") val timestamp: String?,
     @JsonProperty("parent_comment_id") val parentCommentId: Int? = null
-){
-    // Add no-args constructor for JPA
-    constructor() : this(null, 0, "", 0, "", null, null, null)
-}
+)
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class ReplyDto(

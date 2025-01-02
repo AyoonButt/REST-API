@@ -1,24 +1,15 @@
 package com.api.postgres.repositories
 
-import com.api.postgres.CastDto
+
 import com.api.postgres.CastProjection
-import com.api.postgres.CommentDto
 import com.api.postgres.CommentProjection
-import com.api.postgres.CrewDto
 import com.api.postgres.CrewProjection
-import com.api.postgres.PostDto
 import com.api.postgres.PostProjection
-import com.api.postgres.TrailerInteractionDto
 import com.api.postgres.TrailerInteractionProjection
-import com.api.postgres.UserDto
-import com.api.postgres.UserPostInteractionDto
 import com.api.postgres.UserPostInteractionProjection
-import com.api.postgres.UserPreferencesDto
 import com.api.postgres.UserPreferencesProjection
 import com.api.postgres.UserProjection
 import com.api.postgres.models.*
-import org.springframework.data.domain.Page
-import org.springframework.data.domain.Pageable
 
 
 import org.springframework.data.jpa.repository.JpaRepository  // Import JpaRepository
@@ -59,17 +50,19 @@ interface CommentRepository : JpaRepository<CommentEntity, Int> {
     @Modifying
     @Query(
         value = """
-        INSERT INTO comments (user_id, post_id, content, sentiment, timestamp)
+        INSERT INTO comments (user_id, username, post_id, content, sentiment, timestamp)
         VALUES (:userId, :postId, :content, :sentiment, :timestamp)
         """,
         nativeQuery = true
     )
     fun insertComment(
         @Param("userId") userId: Int,
+        @Param("username") username: String,
         @Param("postId") postId: Int,
         @Param("content") content: String,
         @Param("sentiment") sentiment: String?,
-        @Param("timestamp") timestamp: String?
+        @Param("timestamp") timestamp: String?,
+        @Param("parentCommentId") parentCommentId: Int?
     )
 
     @Modifying
@@ -118,24 +111,48 @@ interface CommentRepository : JpaRepository<CommentEntity, Int> {
 
     @Query(
         value = """
+    WITH RECURSIVE reply_hierarchy AS (
+        -- Base case: direct replies to the parent comment
         SELECT 
-            c.comment_id as commentId,
-            c.user_id as userId,
-            u.username as username,
-            c.post_id as postId,
-            c.content as content,
-            c.sentiment as sentiment,
-            c.timestamp as timestamp,
-            c.parent_comment_id as parentCommentId
+            c.comment_id,
+            c.user_id,
+            u.username,
+            c.post_id,
+            c.content,
+            c.sentiment,
+            c.timestamp,
+            c.parent_comment_id,
+            1 as depth,
+            ARRAY[c.timestamp] as path
         FROM comments c
         JOIN users u ON c.user_id = u.user_id
         WHERE c.parent_comment_id = :parentId
         AND c.user_id = :userId
-        ORDER BY c.timestamp DESC
-        LIMIT :limit OFFSET :offset
-        """,
-        nativeQuery = true
+
+        UNION ALL
+
+        -- Recursive case: replies to replies
+        SELECT 
+            c.comment_id,
+            c.user_id,
+            u.username,
+            c.post_id,
+            c.content,
+            c.sentiment,
+            c.timestamp,
+            c.parent_comment_id,
+            rh.depth + 1,
+            rh.path || c.timestamp
+        FROM comments c
+        JOIN users u ON c.user_id = u.user_id
+        JOIN reply_hierarchy rh ON c.parent_comment_id = rh.comment_id
+        WHERE c.user_id = :userId
     )
+    SELECT * FROM reply_hierarchy
+    ORDER BY path DESC
+    LIMIT :limit OFFSET :offset
+""", nativeQuery = true)
+
     fun findRepliesByParentIdAndUserId(
         @Param("parentId") parentId: Int,
         @Param("userId") userId: Int,

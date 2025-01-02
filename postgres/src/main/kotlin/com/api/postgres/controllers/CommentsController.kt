@@ -28,7 +28,7 @@ class CommentsController(
         }
     }
 
-    @PostMapping
+    @PostMapping("/insert")
     suspend fun addComment(@RequestBody newComment: CommentDto): ResponseEntity<String> {
         logger.info("Received request to add a new comment: $newComment")
         return try {
@@ -41,33 +41,8 @@ class CommentsController(
         }
     }
 
-    @PostMapping("/{userId}/comments/{commentId}/replies")
-    suspend fun addReply(
-        @PathVariable userId: Int,
-        @PathVariable commentId: Int,
-        @RequestBody replyRequest: ReplyDto
-    ): ResponseEntity<String> {
-        logger.info("Received reply request for commentId: $commentId by userId: $userId")
-        return try {
-            val reply = CommentDto(
-                commentId = null,
-                userId = userId,
-                postId = replyRequest.postId,
-                content = replyRequest.content,
-                sentiment = replyRequest.sentiment,
-                timestamp = replyRequest.timestamp,
-                parentCommentId = commentId,
-                username = "" // Will be filled by the service layer
-            )
 
-            commentsService.addReplyToComment(commentId, reply)
-            logger.info("Reply added successfully for commentId: $commentId")
-            ResponseEntity.ok("Reply added successfully")
-        } catch (e: Exception) {
-            logger.error("Error adding reply for commentId: $commentId by userId: $userId: ${e.message}", e)
-            ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.message)
-        }
-    }
+
 
     @GetMapping("/{commentId}/replies")
     suspend fun getReplies(
