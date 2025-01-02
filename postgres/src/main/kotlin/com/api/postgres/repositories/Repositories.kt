@@ -50,9 +50,9 @@ interface CommentRepository : JpaRepository<CommentEntity, Int> {
     @Modifying
     @Query(
         value = """
-        INSERT INTO comments (user_id, username, post_id, content, sentiment, timestamp)
-        VALUES (:userId, :postId, :content, :sentiment, :timestamp)
-        """,
+    INSERT INTO comments (user_id, post_id, content, sentiment, timestamp, parent_comment_id)
+    VALUES (:userId, :postId, :content, :sentiment, :timestamp, :parentCommentId)
+    """,
         nativeQuery = true
     )
     fun insertComment(
