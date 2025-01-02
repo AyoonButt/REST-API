@@ -57,7 +57,6 @@ interface CommentRepository : JpaRepository<CommentEntity, Int> {
     )
     fun insertComment(
         @Param("userId") userId: Int,
-        @Param("username") username: String,
         @Param("postId") postId: Int,
         @Param("content") content: String,
         @Param("sentiment") sentiment: String?,

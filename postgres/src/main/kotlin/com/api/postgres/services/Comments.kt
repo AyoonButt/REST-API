@@ -50,7 +50,6 @@ class Comments(
         withContext(Dispatchers.IO) {
             commentRepository.insertComment(
                 userId = comment.userId,
-                username = comment.username,
                 postId = comment.postId,
                 content = comment.content,
                 sentiment = comment.sentiment,
