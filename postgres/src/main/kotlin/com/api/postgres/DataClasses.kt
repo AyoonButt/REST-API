@@ -6,6 +6,12 @@ import com.fasterxml.jackson.annotation.JsonProperty
 
 
 @JsonIgnoreProperties(ignoreUnknown = true)
+data class ApiResponse(
+    @JsonProperty("success") val success: Boolean,
+    @JsonProperty("message") val message: String
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class UserRequest(
     @JsonProperty("user_dto") val userDto: UserDto,
     @JsonProperty("subscriptions") val subscriptions: List<Int>,

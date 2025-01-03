@@ -1,5 +1,6 @@
 package com.api.postgres.controllers
 
+import com.api.postgres.ApiResponse
 import com.api.postgres.UserPostInteractionDto
 import com.api.postgres.services.PostInteractions
 import org.slf4j.Logger
@@ -18,11 +19,18 @@ class PostInteractionsController(
 
     // Endpoint to save interaction data for a post
     @PostMapping("/save")
-    suspend fun saveInteractionData(@RequestBody interactionData: UserPostInteractionDto): ResponseEntity<String> {
+    suspend fun saveInteractionData(@RequestBody interactionData: UserPostInteractionDto): ResponseEntity<ApiResponse> {
         logger.info("Saving interaction data for postId: ${interactionData.postId} and userId: ${interactionData.userId}")
-        postInteractionsService.saveInteractionData(interactionData)
-        logger.info("Interaction data saved successfully for postId: ${interactionData.postId} and userId: ${interactionData.userId}")
-        return ResponseEntity.status(HttpStatus.CREATED).body("Interaction data saved successfully")
+        return try {
+            postInteractionsService.saveInteractionData(interactionData)
+            logger.info("Interaction data saved successfully for postId: ${interactionData.postId} and userId: ${interactionData.userId}")
+            ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse(success = true, message = "Interaction data saved successfully"))
+        } catch (e: Exception) {
+            logger.error("Failed to save interaction data: ${e.message}")
+            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse(success = false, message = "Failed to save interaction data"))
+        }
     }
 
     // Endpoint to update the interaction timestamp for a post

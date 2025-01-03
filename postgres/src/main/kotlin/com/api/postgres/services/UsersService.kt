@@ -17,6 +17,8 @@ import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDateTime
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import kotlin.Int
 
 
@@ -27,7 +29,7 @@ class UsersService @Autowired constructor(
     private val userGenreRepository: UserGenresRepository,
     private val userAvoidGenreRepository: UserAvoidGenresRepository
 ) {
-
+    private val logger: Logger = LoggerFactory.getLogger(Posts::class.java)
     private fun UserProjection.toDto() = UserDto(
         userId = userId,
         name = name,
@@ -61,7 +63,17 @@ class UsersService @Autowired constructor(
         avoidGenreIds = avoidGenreIds
     )
 
-
+    @Transactional(readOnly = true)
+    suspend fun getUserByUsername(username: String): Result<UserEntity?> = withContext(Dispatchers.IO) {
+        try {
+            val user = userRepository.findByUsername(username)
+            logger.info("Found user for username: $username")
+            Result.success(user)
+        } catch (e: Exception) {
+            logger.error("Error finding user by username $username: ${e.message}")
+            Result.failure(e)
+        }
+    }
 
     @Transactional
     suspend fun addUser(

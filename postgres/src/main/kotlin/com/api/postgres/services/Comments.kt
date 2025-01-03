@@ -47,16 +47,16 @@ class Comments(
 
     @Transactional
     suspend fun insertComment(comment: CommentDto) {
-        withContext(Dispatchers.IO) {
-            commentRepository.insertComment(
-                userId = comment.userId,
-                postId = comment.postId,
-                content = comment.content,
-                sentiment = comment.sentiment,
-                timestamp = comment.timestamp,
-                parentCommentId = comment.parentCommentId,
-            )
-        }
+
+        commentRepository.insertComment(
+            userId = comment.userId,
+            postId = comment.postId,
+            content = comment.content,
+            sentiment = comment.sentiment,
+            timestamp = comment.timestamp,
+            parentCommentId = comment.parentCommentId,
+        )
+
     }
 
 

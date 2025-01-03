@@ -30,7 +30,8 @@ class PostInteractions(private val interactionRepository: UserPostInteractionRep
 
     @Transactional
     suspend fun saveInteractionData(interactionData: UserPostInteractionDto) {
-        withContext(Dispatchers.IO) {
+        try {
+
             interactionRepository.insertInteraction(
                 userId = interactionData.userId,
                 postId = interactionData.postId,
@@ -41,6 +42,10 @@ class PostInteractions(private val interactionRepository: UserPostInteractionRep
                 commentMade = interactionData.commentMade,
                 timestamp = interactionData.timestamp
             )
+            logger.info("Successfully saved interaction for user: ${interactionData.userId}, post: ${interactionData.postId}")
+        } catch (e: Exception) {
+            logger.error("Error saving interaction: ${e.message}")
+            throw e
         }
     }
 

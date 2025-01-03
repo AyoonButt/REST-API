@@ -1,5 +1,6 @@
 package com.api.postgres.controllers
 
+import com.api.postgres.ApiResponse
 import com.api.postgres.CommentDto
 import com.api.postgres.ReplyDto
 import com.api.postgres.services.Comments
@@ -29,18 +30,25 @@ class CommentsController(
     }
 
     @PostMapping("/insert")
-    suspend fun addComment(@RequestBody newComment: CommentDto): ResponseEntity<String> {
+    suspend fun addComment(@RequestBody newComment: CommentDto): ResponseEntity<ApiResponse> {
         logger.info("Received request to add a new comment: $newComment")
         return try {
             commentsService.insertComment(newComment)
             logger.info("Comment added successfully: $newComment")
-            ResponseEntity.status(HttpStatus.CREATED).body("Comment added successfully")
+            ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse(
+                    success = true,
+                    message = "Comment added successfully"
+                ))
         } catch (ex: Exception) {
             logger.error("Error adding comment: ${ex.message}", ex)
-            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to add comment")
+            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse(
+                    success = false,
+                    message = "Failed to add comment"
+                ))
         }
     }
-
 
 
 

@@ -1,9 +1,7 @@
 package com.api.postgres.controllers
 
 import com.api.postgres.PostDto
-import com.api.postgres.models.PostEntity
 import com.api.postgres.services.Posts
-import kotlinx.coroutines.runBlocking
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
@@ -34,7 +32,7 @@ class PostsController(
         }
     }
 
-    @GetMapping
+    @GetMapping("/list")
     suspend fun getPosts(
         @RequestParam(defaultValue = "10") limit: Int,
         @RequestParam(defaultValue = "0") offset: Int
@@ -47,6 +45,7 @@ class PostsController(
             ResponseEntity.status(HttpStatus.NO_CONTENT).build()
         }
     }
+
 
     @PutMapping("/{postId}/like")
     suspend fun incrementLikes(@PathVariable postId: Int): ResponseEntity<String> {

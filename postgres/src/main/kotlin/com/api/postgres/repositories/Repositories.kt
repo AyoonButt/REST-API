@@ -10,6 +10,7 @@ import com.api.postgres.UserPostInteractionProjection
 import com.api.postgres.UserPreferencesProjection
 import com.api.postgres.UserProjection
 import com.api.postgres.models.*
+import jakarta.transaction.Transactional
 
 
 import org.springframework.data.jpa.repository.JpaRepository  // Import JpaRepository
@@ -48,6 +49,7 @@ interface CommentRepository : JpaRepository<CommentEntity, Int> {
     ): List<CommentProjection>
 
     @Modifying
+    @Transactional
     @Query(
         value = """
     INSERT INTO comments (user_id, post_id, content, sentiment, timestamp, parent_comment_id)
@@ -221,17 +223,17 @@ interface UserTrailerInteractionRepository : JpaRepository<UserTrailerInteractio
 
     @Modifying
     @Query("""
-        INSERT INTO user_trailer_interactions (
-            user_id, post_id, time_spent, replay_count, is_muted,
-            like_state, save_state, comment_button_pressed,
-            comment_made, timestamp
-        ) VALUES (
-            :userId, :postId, :timeSpent, :replayCount, :isMuted,
-            :likeState, :saveState, :commentButtonPressed,
-            :commentMade, :timestamp
-        )
-    """, nativeQuery = true)
-    fun insertInteraction(
+    INSERT INTO user_trailer_interactions (
+        user_id, post_id, time_spent, replay_count, is_muted,
+        like_state, save_state, comment_button_pressed,
+        comment_made, timestamp
+    ) VALUES (
+        :userId, :postId, :timeSpent, :replayCount, :isMuted,
+        :likeState, :saveState, :commentButtonPressed,
+        :commentMade, :timestamp
+    )
+""", nativeQuery = true)
+    suspend fun insertInteraction(
         @Param("userId") userId: Int,
         @Param("postId") postId: Int,
         @Param("timeSpent") timeSpent: Long,
@@ -277,6 +279,7 @@ interface UserTrailerInteractionRepository : JpaRepository<UserTrailerInteractio
 interface UserPostInteractionRepository : JpaRepository<UserPostInteraction, Long> {
 
     @Modifying
+    @Transactional
     @Query("""
         INSERT INTO user_post_interactions 
         (user_id, post_id, time_spent_on_post, like_state, save_state, 
@@ -589,6 +592,9 @@ interface ProviderRepository : JpaRepository<SubscriptionProvider, Int> {
 
 @Repository
 interface UserRepository : JpaRepository<UserEntity, Int> {
+    @Query("SELECT u FROM UserEntity u WHERE u.username = :username")
+    fun findByUsername(@Param("username") username: String): UserEntity?
+
     @Query("""
         SELECT u.userId as userId, 
                u.name as name, 

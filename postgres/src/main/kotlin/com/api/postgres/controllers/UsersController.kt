@@ -4,6 +4,7 @@ package com.api.postgres.controllers
 import com.api.postgres.UserPreferencesDto
 import com.api.postgres.UserRequest
 import com.api.postgres.UserUpdateRequest
+import com.api.postgres.models.UserEntity
 import com.api.postgres.services.UsersService
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -16,6 +17,32 @@ import java.time.LocalDateTime
 @RequestMapping("/api/users")
 class UsersController(private val usersService: UsersService) {
     private val logger: Logger = LoggerFactory.getLogger(UsersController::class.java)
+
+    @GetMapping("/username")
+    suspend fun getUserByUsername(@RequestParam username: String): ResponseEntity<UserEntity?> {
+        logger.info("Fetching user for username: $username")
+        return try {
+            val userResult = usersService.getUserByUsername(username)
+            userResult.fold(
+                onSuccess = { user ->
+                    if (user != null) {
+                        logger.info("Successfully found user for username: $username")
+                        ResponseEntity.ok(user)
+                    } else {
+                        logger.info("No user found for username: $username")
+                        ResponseEntity.notFound().build()
+                    }
+                },
+                onFailure = { e ->
+                    logger.error("Error fetching user by username $username: ${e.message}")
+                    ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build()
+                }
+            )
+        } catch (e: Exception) {
+            logger.error("Unexpected error fetching user by username $username: ${e.message}")
+            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build()
+        }
+    }
 
     @PostMapping("/add")
     suspend fun addUser(@RequestBody request: UserRequest): ResponseEntity<Int> {
