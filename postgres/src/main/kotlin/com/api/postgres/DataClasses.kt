@@ -12,6 +12,13 @@ data class ApiResponse(
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
+data class CommentResponse(
+    @JsonProperty("success") val success: Boolean,
+    @JsonProperty("message") val message: String,
+    @JsonProperty("commentId") val commentId: Int
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class UserRequest(
     @JsonProperty("user_dto") val userDto: UserDto,
     @JsonProperty("subscriptions") val subscriptions: List<Int>,
@@ -156,4 +163,10 @@ data class UserPreferencesDto(
     @JsonProperty("subscriptions") val subscriptions: List<Int>,
     @JsonProperty("genre_ids") val genreIds: List<Int>,
     @JsonProperty("avoid_genre_ids") val avoidGenreIds: List<Int>
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class ReplyCountDto(
+    @JsonProperty("parent_id") val parentId: Int,
+    @JsonProperty("reply_count") val replyCount: Int
 )

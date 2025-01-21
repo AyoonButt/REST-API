@@ -112,3 +112,10 @@ interface UserPreferencesProjection {
     val genreIds: List<Int>
     val avoidGenreIds: List<Int>
 }
+
+interface ReplyCountProjection {
+    val parentId: Int
+    val replyCount: Int
+}
+
+

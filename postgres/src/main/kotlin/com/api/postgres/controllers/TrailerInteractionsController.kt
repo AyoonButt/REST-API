@@ -1,9 +1,11 @@
 package com.api.postgres.controllers
 
+import com.api.postgres.ApiResponse
 import com.api.postgres.TrailerInteractionDto
 import com.api.postgres.services.TrailerInteractions
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
@@ -25,10 +27,22 @@ class TrailerInteractionsController(private val trailerInteractions: TrailerInte
     @PostMapping("/save")
     suspend fun saveInteractionData(
         @RequestBody interactionData: TrailerInteractionDto
-    ): ResponseEntity<String> {
-        logger.info("Saving interaction data for userId: ${interactionData.userId}")
-        trailerInteractions.saveInteractionData(interactionData)
-        return ResponseEntity.ok("Interaction saved successfully")
+    ): ResponseEntity<ApiResponse> {
+        return try {
+            logger.info("Saving interaction data for userId: ${interactionData.userId}")
+            trailerInteractions.saveInteractionData(interactionData)
+            ResponseEntity.ok(ApiResponse(
+                success = true,
+                message = "Interaction saved successfully"
+            ))
+        } catch (e: Exception) {
+            logger.error("Error saving interaction data", e)
+            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse(
+                    success = false,
+                    message = "Failed to save interaction: ${e.message}"
+                ))
+        }
     }
 
     @GetMapping("/user/{userId}")

@@ -5,6 +5,7 @@ import com.api.postgres.CastProjection
 import com.api.postgres.CommentProjection
 import com.api.postgres.CrewProjection
 import com.api.postgres.PostProjection
+import com.api.postgres.ReplyCountProjection
 import com.api.postgres.TrailerInteractionProjection
 import com.api.postgres.UserPostInteractionProjection
 import com.api.postgres.UserPreferencesProjection
@@ -64,48 +65,38 @@ interface CommentRepository : JpaRepository<CommentEntity, Int> {
         @Param("sentiment") sentiment: String?,
         @Param("timestamp") timestamp: String?,
         @Param("parentCommentId") parentCommentId: Int?
-    )
+    ): Int  // Will return number of rows affected
 
-    @Modifying
+    // Add separate query for getting the last inserted ID
     @Query(
-        value = """
-        INSERT INTO comments (parent_comment_id, user_id, post_id, content, sentiment, timestamp)
-        VALUES (:parentCommentId, :userId, :postId, :content, :sentiment, :timestamp)
-        """,
+        value = "SELECT lastval()",
         nativeQuery = true
     )
-    fun insertReply(
-        @Param("parentCommentId") parentCommentId: Int,
-        @Param("userId") userId: Int,
-        @Param("postId") postId: Int,
-        @Param("content") content: String,
-        @Param("sentiment") sentiment: String?,
-        @Param("timestamp") timestamp: String?
-    )
-
-
+    fun getLastInsertedId(): Int
 
     @Query(
         value = """
-        SELECT 
-            c.comment_id as commentId,
-            c.user_id as userId,
-            u.username as username,
-            c.post_id as postId,
-            c.content as content,
-            c.sentiment as sentiment,
-            c.timestamp as timestamp,
-            c.parent_comment_id as parentCommentId
-        FROM comments c
-        JOIN users u ON c.user_id = u.user_id
-        WHERE c.parent_comment_id = :parentId
-        ORDER BY c.timestamp DESC
-        LIMIT :limit OFFSET :offset
-        """,
+    SELECT 
+        c.comment_id as commentId,
+        c.user_id as userId,
+        u.username as username,
+        c.post_id as postId,
+        c.content as content,
+        c.sentiment as sentiment,
+        c.timestamp as timestamp,
+        c.parent_comment_id as parentCommentId
+    FROM comments c
+    JOIN users u ON c.user_id = u.user_id
+    WHERE c.parent_comment_id = :parentId
+    AND c.user_id = :userId
+    ORDER BY c.timestamp DESC
+    LIMIT :limit OFFSET :offset
+    """,
         nativeQuery = true
     )
-    fun findRepliesByParentId(
+    fun findRepliesByParentIdAndUserId(
         @Param("parentId") parentId: Int,
+        @Param("userId") userId: Int,
         @Param("limit") limit: Int,
         @Param("offset") offset: Int
     ): List<CommentProjection>
@@ -123,15 +114,13 @@ interface CommentRepository : JpaRepository<CommentEntity, Int> {
             c.sentiment,
             c.timestamp,
             c.parent_comment_id,
-            1 as depth,
-            ARRAY[c.timestamp] as path
+            1 as depth
         FROM comments c
         JOIN users u ON c.user_id = u.user_id
         WHERE c.parent_comment_id = :parentId
-        AND c.user_id = :userId
-
+        
         UNION ALL
-
+        
         -- Recursive case: replies to replies
         SELECT 
             c.comment_id,
@@ -142,21 +131,33 @@ interface CommentRepository : JpaRepository<CommentEntity, Int> {
             c.sentiment,
             c.timestamp,
             c.parent_comment_id,
-            rh.depth + 1,
-            rh.path || c.timestamp
+            CASE 
+                WHEN rh.depth >= 10 THEN rh.depth
+                ELSE rh.depth + 1 
+            END as depth
         FROM comments c
         JOIN users u ON c.user_id = u.user_id
         JOIN reply_hierarchy rh ON c.parent_comment_id = rh.comment_id
-        WHERE c.user_id = :userId
+        WHERE rh.depth < 10
     )
-    SELECT * FROM reply_hierarchy
-    ORDER BY path DESC
+    SELECT 
+        comment_id as commentId,
+        user_id as userId,
+        username,
+        post_id as postId,
+        content,
+        sentiment,
+        timestamp,
+        parent_comment_id as parentCommentId,
+        depth
+    FROM reply_hierarchy
+    ORDER BY timestamp DESC
     LIMIT :limit OFFSET :offset
-""", nativeQuery = true)
-
-    fun findRepliesByParentIdAndUserId(
+    """,
+        nativeQuery = true
+    )
+    fun findRepliesByParentId(
         @Param("parentId") parentId: Int,
-        @Param("userId") userId: Int,
         @Param("limit") limit: Int,
         @Param("offset") offset: Int
     ): List<CommentProjection>
@@ -169,6 +170,37 @@ interface CommentRepository : JpaRepository<CommentEntity, Int> {
     WHERE c.commentId = :commentId
     """)
     fun findParentCommentUsername(@Param("commentId") commentId: Int): String?
+
+    @Query(
+        value = """
+    WITH RECURSIVE reply_tree AS (
+    -- Base case: direct replies
+    SELECT 
+        c.comment_id,
+        c.parent_comment_id,
+        1 as level
+    FROM comments c
+    WHERE c.parent_comment_id IN (:parentIds)
+    
+    UNION ALL
+    
+    -- Recursive case: replies to replies
+    SELECT 
+        c.comment_id,
+        rt.parent_comment_id,
+        rt.level + 1
+    FROM comments c
+    INNER JOIN reply_tree rt ON c.parent_comment_id = rt.comment_id
+    )
+    SELECT 
+        parent_comment_id as parentId,
+        COUNT(*) as replyCount
+    FROM reply_tree
+    GROUP BY parent_comment_id;
+    """,
+        nativeQuery = true
+    )
+    fun getReplyCountsForComments(@Param("parentIds") parentIds: List<Int>): List<ReplyCountProjection>
 }
 
 @Repository
@@ -211,6 +243,7 @@ interface UserTrailerInteractionRepository : JpaRepository<UserTrailerInteractio
     ): TrailerInteractionProjection?
 
     @Modifying
+    @Transactional
     @Query("""
         UPDATE UserTrailerInteraction t 
         SET t.timestamp = :timestamp 
@@ -222,9 +255,10 @@ interface UserTrailerInteractionRepository : JpaRepository<UserTrailerInteractio
     )
 
     @Modifying
+    @Transactional
     @Query("""
     INSERT INTO user_trailer_interactions (
-        user_id, post_id, time_spent, replay_count, is_muted,
+        user_id, post_id, time_spent_on_trailer, replay_count, is_muted,
         like_state, save_state, comment_button_pressed,
         comment_made, timestamp
     ) VALUES (
@@ -233,7 +267,7 @@ interface UserTrailerInteractionRepository : JpaRepository<UserTrailerInteractio
         :commentMade, :timestamp
     )
 """, nativeQuery = true)
-    suspend fun insertInteraction(
+    fun insertInteraction(
         @Param("userId") userId: Int,
         @Param("postId") postId: Int,
         @Param("timeSpent") timeSpent: Long,
@@ -244,7 +278,7 @@ interface UserTrailerInteractionRepository : JpaRepository<UserTrailerInteractio
         @Param("commentButtonPressed") commentButtonPressed: Boolean,
         @Param("commentMade") commentMade: Boolean,
         @Param("timestamp") timestamp: String
-    )
+    ): Int
 
     @Query("""
         SELECT p.postId 
@@ -299,6 +333,7 @@ interface UserPostInteractionRepository : JpaRepository<UserPostInteraction, Lon
     )
 
     @Modifying
+    @Transactional
     @Query("""
         UPDATE user_post_interactions 
         SET timestamp = :timestamp
@@ -433,6 +468,7 @@ interface PostRepository : JpaRepository<PostEntity, Int> {
     fun findPostIdByTmdbId(@Param("tmdbId") tmdbId: Int): Int?
 
     @Modifying
+    @Transactional
     @Query(
         value = "UPDATE posts SET post_like_count = post_like_count + 1 WHERE post_id = :postId",
         nativeQuery = true
@@ -440,6 +476,7 @@ interface PostRepository : JpaRepository<PostEntity, Int> {
     fun incrementPostLikeCount(@Param("postId") postId: Int)
 
     @Modifying
+    @Transactional
     @Query(
         value = "UPDATE posts SET trailer_like_count = trailer_like_count + 1 WHERE post_id = :postId",
         nativeQuery = true
@@ -450,6 +487,7 @@ interface PostRepository : JpaRepository<PostEntity, Int> {
 @Repository
 interface PostGenresRepository : JpaRepository<PostGenres, PostGenreId> {
     @Modifying
+    @Transactional
     @Query("""
         INSERT INTO post_genres (post_id, genre_id)
         VALUES (:postId, :genreId)
@@ -463,6 +501,7 @@ interface PostGenresRepository : JpaRepository<PostGenres, PostGenreId> {
 @Repository
 interface PostSubscriptionsRepository : JpaRepository<PostSubscriptions, PostSubscriptionId> {
     @Modifying
+    @Transactional
     @Query("""
         INSERT INTO post_subscriptions (post_id, provider_id)
         VALUES (:postId, :providerId)
@@ -497,6 +536,7 @@ interface CastRepository : JpaRepository<CastEntity, Int> {
 
 
     @Modifying
+    @Transactional
     @Query("""
         INSERT INTO cast_members (
             post_id, person_id, name, gender, known_for_department,

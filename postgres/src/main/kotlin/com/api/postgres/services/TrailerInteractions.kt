@@ -32,27 +32,25 @@ class TrailerInteractions(
 
     @Transactional
     suspend fun updateInteractionTimestamp(postId: Int, timestamp: String) {
-        withContext(Dispatchers.IO) {
-            userTrailerInteractionRepository.updateTimestamp(postId, timestamp)
-        }
+
+        userTrailerInteractionRepository.updateTimestamp(postId, timestamp)
+
     }
 
     @Transactional
-    suspend fun saveInteractionData(interaction: TrailerInteractionDto) {
-        withContext(Dispatchers.IO) {
-            userTrailerInteractionRepository.insertInteraction(
-                userId = interaction.userId,
-                postId = interaction.postId,
-                timeSpent = interaction.timeSpent,
-                replayCount = interaction.replayCount,
-                isMuted = interaction.isMuted,
-                likeState = interaction.likeState,
-                saveState = interaction.saveState,
-                commentButtonPressed = interaction.commentButtonPressed,
-                commentMade = interaction.commentMade,
-                timestamp = System.currentTimeMillis().toString()
-            )
-        }
+    suspend fun saveInteractionData(interaction: TrailerInteractionDto) = withContext(Dispatchers.IO) {
+        userTrailerInteractionRepository.insertInteraction(
+            userId = interaction.userId,
+            postId = interaction.postId,
+            timeSpent = interaction.timeSpent,
+            replayCount = interaction.replayCount,
+            isMuted = interaction.isMuted,
+            likeState = interaction.likeState,
+            saveState = interaction.saveState,
+            commentButtonPressed = interaction.commentButtonPressed,
+            commentMade = interaction.commentMade,
+            timestamp = System.currentTimeMillis().toString()
+        )
     }
 
 

@@ -2,7 +2,8 @@ package com.api.postgres.controllers
 
 import com.api.postgres.ApiResponse
 import com.api.postgres.CommentDto
-import com.api.postgres.ReplyDto
+import com.api.postgres.CommentResponse
+import com.api.postgres.ReplyCountDto
 import com.api.postgres.services.Comments
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -30,25 +31,33 @@ class CommentsController(
     }
 
     @PostMapping("/insert")
-    suspend fun addComment(@RequestBody newComment: CommentDto): ResponseEntity<ApiResponse> {
+    suspend fun addComment(@RequestBody newComment: CommentDto): ResponseEntity<CommentResponse> {
         logger.info("Received request to add a new comment: $newComment")
         return try {
-            commentsService.insertComment(newComment)
-            logger.info("Comment added successfully: $newComment")
+            val commentId = commentsService.insertComment(newComment)
+            logger.info("Comment added successfully with ID: $commentId")
             ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse(
-                    success = true,
-                    message = "Comment added successfully"
-                ))
+                .body(
+                    CommentResponse(
+                        success = true,
+                        message = "Comment added successfully",
+                        commentId = commentId // Include the generated commentId
+                    )
+                )
         } catch (ex: Exception) {
             logger.error("Error adding comment: ${ex.message}", ex)
             ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse(
-                    success = false,
-                    message = "Failed to add comment"
-                ))
+                .body(
+                    CommentResponse(
+                        success = false,
+                        message = "Failed to add comment",
+                        commentId = 0
+
+                    )
+                )
         }
     }
+
 
 
 
@@ -78,19 +87,45 @@ class CommentsController(
     }
 
     @GetMapping("/{commentId}/parent-username")
-    suspend fun getParentCommentUsername(@PathVariable commentId: Int): ResponseEntity<String> {
+    suspend fun getParentCommentUsername(@PathVariable commentId: Int): ResponseEntity<ApiResponse> {
         logger.info("Fetching parent comment username for commentId: $commentId")
+
         return try {
             val username = commentsService.getParentCommentUsername(commentId)
                 ?: throw Exception("Parent comment or username not found")
 
             logger.info("Found parent username: $username for commentId: $commentId")
-            ResponseEntity.ok(username)
+            ResponseEntity.ok(ApiResponse(
+                success = true,
+                message = username
+            ))
         } catch (e: Exception) {
             logger.error("Error fetching parent username for commentId: $commentId: ${e.message}", e)
-            ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.message)
+            ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse(
+                    success = false,
+                    message = e.message ?: "Unknown error"
+                ))
         }
     }
+
+    @GetMapping("/reply-counts")
+    suspend fun getReplyCountsForComments(
+        @RequestParam parentIds: List<Int>
+    ): ResponseEntity<List<ReplyCountDto>> {
+        logger.info("Getting reply counts for parent IDs: $parentIds")
+
+        return try {
+            val replyCounts = commentsService.getReplyCountsForComments(parentIds)
+            logger.info("Successfully retrieved ${replyCounts.size} reply counts")
+            ResponseEntity.ok(replyCounts)
+        } catch (e: Exception) {
+            logger.error("Error getting reply counts for parent IDs: $parentIds", e)
+            throw e
+        }
+    }
+
 }
+
 
 

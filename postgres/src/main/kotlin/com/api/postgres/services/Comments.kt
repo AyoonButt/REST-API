@@ -3,6 +3,7 @@ package com.api.postgres.services
 
 import com.api.postgres.CommentDto
 import com.api.postgres.CommentProjection
+import com.api.postgres.ReplyCountDto
 import com.api.postgres.repositories.CommentRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -33,7 +34,7 @@ class Comments(
     @Transactional(readOnly = true)
     suspend fun loadComments(
         postId: Int,
-        limit: Int = 10,
+        limit: Int = 50,
         offset: Int = 0
     ): List<CommentDto> = withContext(Dispatchers.IO) {
         try {
@@ -46,8 +47,7 @@ class Comments(
     }
 
     @Transactional
-    suspend fun insertComment(comment: CommentDto) {
-
+    suspend fun insertComment(comment: CommentDto): Int {
         commentRepository.insertComment(
             userId = comment.userId,
             postId = comment.postId,
@@ -56,7 +56,7 @@ class Comments(
             timestamp = comment.timestamp,
             parentCommentId = comment.parentCommentId,
         )
-
+        return commentRepository.getLastInsertedId()
     }
 
 
@@ -102,4 +102,21 @@ class Comments(
             commentRepository.findParentCommentUsername(commentId)
         }
     }
+
+
+    @Transactional(readOnly = true)
+    suspend fun getReplyCountsForComments(parentIds: List<Int>): List<ReplyCountDto> {
+        if (parentIds.isEmpty()) return emptyList()
+
+        return withContext(Dispatchers.IO) {
+            commentRepository.getReplyCountsForComments(parentIds)
+                .map { projection ->
+                    ReplyCountDto(
+                        parentId = projection.parentId,
+                        replyCount = projection.replyCount
+                    )
+                }
+        }
+    }
+
 }
