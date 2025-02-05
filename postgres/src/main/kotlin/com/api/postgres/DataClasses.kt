@@ -3,6 +3,9 @@ package com.api.postgres
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonProperty
+import com.fasterxml.jackson.annotation.JsonSubTypes
+import com.fasterxml.jackson.annotation.JsonTypeInfo
+import kotlinx.serialization.Serializable
 
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -169,4 +172,115 @@ data class UserPreferencesDto(
 data class ReplyCountDto(
     @JsonProperty("parent_id") val parentId: Int,
     @JsonProperty("reply_count") val replyCount: Int
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class VideoDto(
+    @JsonProperty("video_key") val videoKey: String,
+    @JsonProperty("post_id") val postId: Int,
+    @JsonProperty("tmdb_id") val tmdbId: Int,
+    @JsonProperty("type") val type: String
+)
+
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
+@JsonSubTypes(
+    JsonSubTypes.Type(value = ClientMessage.UpdateSubscription::class, name = "UPDATE_SUBSCRIPTION")
+)
+sealed class ClientMessage {
+    data class UpdateSubscription(
+        val expandedSections: Set<Int>
+    ) : ClientMessage()
+}
+
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
+@JsonSubTypes(
+    JsonSubTypes.Type(value = ServerMessage.NewRootComment::class, name = "NEW_ROOT_COMMENT"),
+    JsonSubTypes.Type(value = ServerMessage.NewReply::class, name = "NEW_REPLY"),
+    JsonSubTypes.Type(value = ServerMessage.ReplyCountUpdate::class, name = "REPLY_COUNT_UPDATE")
+)
+sealed class ServerMessage {
+    data class NewRootComment(
+        val comment: CommentDto
+    ) : ServerMessage()
+
+    data class NewReply(
+        val comment: CommentDto,
+        val parentId: Int
+    ) : ServerMessage()
+
+    data class ReplyCountUpdate(
+        val commentId: Int,
+        val newCount: Int
+    ) : ServerMessage()
+}
+
+data class PersonDto(
+    @JsonProperty("tmdb_id")
+    val tmdbId: Int,
+    @JsonProperty("name")
+    val name: String,
+    @JsonProperty("biography")
+    val biography: String,
+    @JsonProperty("birthday")
+    val birthday: String?,
+    @JsonProperty("deathday")
+    val deathday: String?,
+    @JsonProperty("place_of_birth")
+    val placeOfBirth: String?,
+    @JsonProperty("profile_path")
+    val profilePath: String?,
+    @JsonProperty("known_for_department")
+    val knownForDepartment: String?,
+    @JsonProperty("credit_ids")
+    val creditIds: List<Int>
+)
+
+
+
+data class MediaDto(
+    @JsonProperty("tmdb_id")
+    val tmdbId: Int,
+    @JsonProperty("title")
+    val title: String,
+    @JsonProperty("overview")
+    val overview: String,
+    @JsonProperty("release_date")
+    val releaseDate: String?,
+    @JsonProperty("runtime")
+    val runtime: Int?,
+    @JsonProperty("last_air_date")
+    val lastAirDate: String?,
+    @JsonProperty("in_production")
+    val inProduction: Boolean?,
+    @JsonProperty("next_episode_to_air")
+    val nextEpisodeToAir: String?,
+    @JsonProperty("number_of_episodes")
+    val numberOfEpisodes: Int?,
+    @JsonProperty("number_of_seasons")
+    val numberOfSeasons: Int?,
+    @JsonProperty("genres")
+    val genres: List<String>,
+    @JsonProperty("origin_countries")
+    val originCountries: List<String>,
+    @JsonProperty("production_companies")
+    val productionCompanies: List<String>,
+    @JsonProperty("collection_name")
+    val collectionName: String?,
+    @JsonProperty("poster_path")
+    val posterPath: String?,
+    @JsonProperty("media_type")
+    val mediaType: String
+)
+
+data class InfoDto(
+    @JsonProperty("tmdb_id")
+    val tmdbId: Int,
+    @JsonProperty("type")
+    val type: String,
+    @JsonProperty("start_timestamp")
+    val startTimestamp: String,
+    @JsonProperty("end_timestamp")
+    val endTimestamp: String,
+    @JsonProperty("user_id")
+    val userId: Int
 )

@@ -4,16 +4,20 @@ import com.api.postgres.ApiResponse
 import com.api.postgres.CommentDto
 import com.api.postgres.CommentResponse
 import com.api.postgres.ReplyCountDto
+import com.api.postgres.services.CommentCoordination
 import com.api.postgres.services.Comments
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
+
+
 @RestController
 @RequestMapping("/api/comments")
 class CommentsController(
     private val commentsService: Comments,
+    private val coordinationService: CommentCoordination
 ) {
     private val logger: Logger = LoggerFactory.getLogger(CommentsController::class.java)
 
@@ -34,14 +38,14 @@ class CommentsController(
     suspend fun addComment(@RequestBody newComment: CommentDto): ResponseEntity<CommentResponse> {
         logger.info("Received request to add a new comment: $newComment")
         return try {
-            val commentId = commentsService.insertComment(newComment)
+            val commentId = coordinationService.insertCommentAndNotify(newComment)
             logger.info("Comment added successfully with ID: $commentId")
             ResponseEntity.status(HttpStatus.CREATED)
                 .body(
                     CommentResponse(
                         success = true,
                         message = "Comment added successfully",
-                        commentId = commentId // Include the generated commentId
+                        commentId = commentId
                     )
                 )
         } catch (ex: Exception) {
@@ -52,12 +56,10 @@ class CommentsController(
                         success = false,
                         message = "Failed to add comment",
                         commentId = 0
-
                     )
                 )
         }
     }
-
 
 
 

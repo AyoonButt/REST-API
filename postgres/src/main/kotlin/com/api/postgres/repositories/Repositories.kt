@@ -4,6 +4,7 @@ package com.api.postgres.repositories
 import com.api.postgres.CastProjection
 import com.api.postgres.CommentProjection
 import com.api.postgres.CrewProjection
+import com.api.postgres.InfoItemProjection
 import com.api.postgres.PostProjection
 import com.api.postgres.ReplyCountProjection
 import com.api.postgres.TrailerInteractionProjection
@@ -19,6 +20,58 @@ import org.springframework.data.jpa.repository.Query  // Import for @Query annot
 import org.springframework.data.repository.query.Param  // Import for @Param annotation
 import org.springframework.stereotype.Repository  // Import for @Repository annotation
 import org.springframework.data.jpa.repository.Modifying
+
+interface InfoRepository : JpaRepository<InfoItem, Long> {
+    fun findByTmdbIdAndTypeAndUserUserId(tmdbId: Int, type: String, userId: Int): InfoItemProjection?
+
+    @Modifying
+    @Transactional
+    @Query("""
+        DELETE FROM info_timestamps 
+        WHERE info_id IN (
+            SELECT i.id FROM more_information i 
+            WHERE i.tmdb_id = :tmdbId 
+            AND i.type = :type 
+            AND i.user_id = :userId
+        )
+    """, nativeQuery = true)
+    fun deleteExistingSessions(
+        @Param("tmdbId") tmdbId: Int,
+        @Param("type") type: String,
+        @Param("userId") userId: Int
+    )
+
+    @Modifying
+    @Transactional
+    @Query("""
+        INSERT INTO info_timestamps (info_id, session_index, start_timestamp, end_timestamp)
+        SELECT i.id, :session_index, :startTimestamp, :endTimestamp
+        FROM more_information i
+        WHERE i.tmdb_id = :tmdbId 
+        AND i.type = :type 
+        AND i.user_id = :userId
+    """, nativeQuery = true)
+    fun insertSession(
+        @Param("tmdbId") tmdbId: Int,
+        @Param("type") type: String,
+        @Param("userId") userId: Int,
+        @Param("session_index") sessionIndex: Int,
+        @Param("startTimestamp") startTimestamp: String,
+        @Param("endTimestamp") endTimestamp: String
+    )
+
+    @Modifying
+    @Transactional
+    @Query("""
+        INSERT INTO more_information (tmdb_id, type, user_id)
+        VALUES (:tmdbId, :type, :userId)
+    """, nativeQuery = true)
+    fun insertNewInfo(
+        @Param("tmdbId") tmdbId: Int,
+        @Param("type") type: String,
+        @Param("userId") userId: Int
+    )
+}
 
 @Repository
 interface CommentRepository : JpaRepository<CommentEntity, Int> {
@@ -161,6 +214,28 @@ interface CommentRepository : JpaRepository<CommentEntity, Int> {
         @Param("limit") limit: Int,
         @Param("offset") offset: Int
     ): List<CommentProjection>
+
+    @Query("""
+    WITH RECURSIVE comment_hierarchy AS (
+        -- Base case: start with the given comment
+        SELECT comment_id, parent_comment_id, 1 as level
+        FROM comments
+        WHERE comment_id = :commentId
+        
+        UNION ALL
+        
+        -- Recursive case: join with parent comments
+        SELECT c.comment_id, c.parent_comment_id, ch.level + 1
+        FROM comments c
+        INNER JOIN comment_hierarchy ch ON c.comment_id = ch.parent_comment_id
+    )
+    SELECT comment_id
+    FROM comment_hierarchy
+    WHERE parent_comment_id IS NULL
+    LIMIT 1
+    """, nativeQuery = true)
+    fun findRootParentId(commentId: Int): Int?
+
 
     @Query("""
     SELECT DISTINCT u.username 
@@ -687,6 +762,7 @@ interface UserRepository : JpaRepository<UserEntity, Int> {
     fun findUserPreferencesById(userId: Int): UserPreferencesProjection?
 
     @Modifying
+    @Transactional
     @Query("UPDATE UserEntity u SET u.recentLogin = :timestamp WHERE u.username = :username")
     fun updateRecentLogin(
         @Param("username") username: String,

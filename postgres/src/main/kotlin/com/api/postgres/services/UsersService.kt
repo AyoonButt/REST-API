@@ -212,9 +212,9 @@ class UsersService @Autowired constructor(
     }
 
     @Transactional
-    suspend fun updateRecentLogin(username: String, timestamp: LocalDateTime) {
+    suspend fun updateRecentLogin(username: String, timestamp: String) {
         withContext(Dispatchers.IO) {
-            userRepository.updateRecentLogin(username, timestamp.toString())
+            userRepository.updateRecentLogin(username, timestamp)
         }
     }
 

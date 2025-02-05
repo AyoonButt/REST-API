@@ -1,5 +1,7 @@
 package com.api.postgres
 
+import com.api.postgres.models.ViewingSession
+
 
 interface CommentProjection {
     val commentId: Int?
@@ -118,4 +120,9 @@ interface ReplyCountProjection {
     val replyCount: Int
 }
 
-
+interface InfoItemProjection {
+    val tmdbId: Int
+    val type: String
+    val userId: Int
+    val sessions: List<ViewingSession>
+}

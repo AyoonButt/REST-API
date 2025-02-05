@@ -3,6 +3,7 @@ package com.api.postgres.services
 
 import com.api.postgres.PostDto
 import com.api.postgres.PostProjection
+import com.api.postgres.VideoDto
 import com.api.postgres.models.PostEntity
 import com.api.postgres.repositories.PostGenresRepository
 import com.api.postgres.repositories.PostRepository
@@ -116,10 +117,10 @@ class Posts(
     }
 
     @Transactional(readOnly = true)
-    suspend fun fetchVideosFromDatabase(limit: Int, offset: Int): List<Pair<String, Int>> {
+    suspend fun fetchVideosFromDatabase(limit: Int, offset: Int): List<VideoDto> {
         return withContext(Dispatchers.IO) {
             postRepository.findAllDtosByOrderByPostId(limit, offset)
-                .map { Pair(it.videoKey, it.postId ?: -1) }
+                .map { VideoDto(it.videoKey, it.postId ?: -1, it.tmdbId, it.type) }
         }
     }
 

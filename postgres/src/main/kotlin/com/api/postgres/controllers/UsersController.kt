@@ -12,6 +12,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import java.time.LocalDateTime
+import java.time.format.DateTimeParseException
 
 @RestController
 @RequestMapping("/api/users")
@@ -97,11 +98,16 @@ class UsersController(private val usersService: UsersService) {
     }
 
     @PutMapping("/{username}/login")
-    suspend fun updateLogin(@PathVariable username: String): ResponseEntity<String> {
+    suspend fun updateLogin(
+        @PathVariable username: String,
+        @RequestParam timestamp: String
+    ): ResponseEntity<String> {
         return try {
-            usersService.updateRecentLogin(username, LocalDateTime.now())
+            logger.info("Updating login for user: $username with timestamp: $timestamp")
+            usersService.updateRecentLogin(username, timestamp)
             ResponseEntity.ok("Login timestamp updated")
         } catch (e: Exception) {
+            logger.error("Failed to update login timestamp", e)
             ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body("Error updating login timestamp")
         }

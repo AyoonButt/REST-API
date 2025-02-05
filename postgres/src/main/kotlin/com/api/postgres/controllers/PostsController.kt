@@ -1,6 +1,7 @@
 package com.api.postgres.controllers
 
 import com.api.postgres.PostDto
+import com.api.postgres.VideoDto
 import com.api.postgres.services.Posts
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -77,15 +78,11 @@ class PostsController(
     suspend fun getVideos(
         @RequestParam(defaultValue = "10") limit: Int,
         @RequestParam(defaultValue = "0") offset: Int
-    ): ResponseEntity<List<Map<String, Any>>> {
+    ): ResponseEntity<List<VideoDto>> {
         logger.info("Fetching videos with limit: $limit, offset: $offset")
         val videos = postsService.fetchVideosFromDatabase(limit, offset)
-            .map { (key, id) -> mapOf("videoKey" to key, "postId" to id) }
-        return if (videos.isNotEmpty()) {
-            ResponseEntity.ok(videos)
-        } else {
-            ResponseEntity.status(HttpStatus.NO_CONTENT).build()
-        }
+        return if (videos.isNotEmpty()) ResponseEntity.ok(videos)
+        else ResponseEntity.status(HttpStatus.NO_CONTENT).build()
     }
 
     @GetMapping("/{postId}")

@@ -3,6 +3,7 @@ package com.api.postgres.services
 
 import com.api.postgres.CommentDto
 import com.api.postgres.CommentProjection
+import com.api.postgres.InfoDto
 import com.api.postgres.ReplyCountDto
 import com.api.postgres.repositories.CommentRepository
 import kotlinx.coroutines.Dispatchers
@@ -60,7 +61,6 @@ class Comments(
     }
 
 
-
     @Transactional(readOnly = true)
     suspend fun findAllReplies(
         parentCommentId: Int,
@@ -73,6 +73,16 @@ class Comments(
         } catch (e: Exception) {
             logger.error("Error finding replies for parent comment $parentCommentId: ${e.message}")
             emptyList()
+        }
+    }
+
+    @Transactional(readOnly = true)
+    suspend fun findRootParentId(commentId: Int): Int? = withContext(Dispatchers.IO) {
+        try {
+            commentRepository.findRootParentId(commentId)
+        } catch (e: Exception) {
+            logger.error("Error finding root parent for comment $commentId: ${e.message}")
+            null
         }
     }
 
