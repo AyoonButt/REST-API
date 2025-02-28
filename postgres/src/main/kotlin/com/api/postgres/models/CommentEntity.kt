@@ -34,14 +34,18 @@ data class CommentEntity(
     var parentComment: CommentEntity? = null,
 
     @OneToMany(mappedBy = "parentComment", cascade = [CascadeType.ALL], fetch = FetchType.LAZY)
-    val replies: List<CommentEntity> = listOf()
+    val replies: List<CommentEntity> = listOf(),
+
+    @Column(name = "comment_type", nullable = false)
+    val commentType: String
 ) {
     constructor() : this(
         commentId = null,
-        user = UserEntity(),  // Ensure UserEntity and PostEntity have default constructors
+        user = UserEntity(),
         post = PostEntity(),
         content = "",
         sentiment = null,
-        timestamp = null
+        timestamp = null,
+        commentType = ""
     )
 }

@@ -12,6 +12,7 @@ interface CommentProjection {
     val sentiment: String?
     val timestamp: String?
     val parentCommentId: Int?
+    val commentType: String
 }
 
 interface CastProjection {
@@ -41,17 +42,16 @@ interface UserPostInteractionProjection {
     val interactionId: Int?
     val userId: Int
     val postId: Int
-    val timeSpentOnPost: Long
+    val startTimestamp: String
+    val endTimestamp: String
     val likeState: Boolean
     val saveState: Boolean
     val commentButtonPressed: Boolean
-    val commentMade: Boolean
-    val timestamp: String
 }
 
 interface PostProjection {
     val postId: Int?
-    val tmdbId: Int
+    val tmdbId: Int?
     val type: String
     val title: String
     val subscription: String
@@ -73,15 +73,15 @@ interface TrailerInteractionProjection {
     val interactionId: Int
     val userId: Int
     val postId: Int
-    val timeSpent: Long
+    val startTimestamp: String
+    val endTimestamp: String
     val replayCount: Int
     val isMuted: Boolean
     val likeState: Boolean
     val saveState: Boolean
     val commentButtonPressed: Boolean
-    val commentMade: Boolean
-    val timestamp: String
 }
+
 interface UserProjection {
     val userId: Int
     val name: String
@@ -125,4 +125,28 @@ interface InfoItemProjection {
     val type: String
     val userId: Int
     val sessions: List<ViewingSession>
+}
+
+interface UserSubscriptionProjection {
+    val userId: Int
+    val providerId: Int
+    val providerName: String
+    val priority: Int
+}
+
+interface UserGenreProjection {
+    val userId: Int
+    val genreId: Int
+    val genreName: String
+    val priority: Int
+}
+
+interface InteractionStatesProjection {
+    val likeState: Boolean?
+    val saveState: Boolean?
+}
+
+interface TimestampProjection {
+    val postId: Int
+    val startTimestamp: String
 }

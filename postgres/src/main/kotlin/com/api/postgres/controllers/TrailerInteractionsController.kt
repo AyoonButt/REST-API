@@ -1,6 +1,7 @@
 package com.api.postgres.controllers
 
 import com.api.postgres.ApiResponse
+import com.api.postgres.InteractionStates
 import com.api.postgres.TrailerInteractionDto
 import com.api.postgres.services.TrailerInteractions
 import org.slf4j.Logger
@@ -14,15 +15,6 @@ import org.springframework.web.bind.annotation.*
 class TrailerInteractionsController(private val trailerInteractions: TrailerInteractions) {
     private val logger: Logger = LoggerFactory.getLogger(TrailerInteractionsController::class.java)
 
-    @PutMapping("/{postId}/timestamp")
-    suspend fun updateInteractionTimestamp(
-        @PathVariable postId: Int,
-        @RequestParam timestamp: String
-    ): ResponseEntity<String> {
-        logger.info("Updating interaction timestamp for postId: $postId")
-        trailerInteractions.updateInteractionTimestamp(postId, timestamp)
-        return ResponseEntity.ok("Timestamp updated successfully")
-    }
 
     @PostMapping("/save")
     suspend fun saveInteractionData(
@@ -93,15 +85,16 @@ class TrailerInteractionsController(private val trailerInteractions: TrailerInte
         }
     }
 
-    @GetMapping("/user/{userId}/commented")
-    suspend fun getCommentMadeTrailers(
-        @PathVariable userId: Int
-    ): ResponseEntity<List<Int>> {
-        val commentedTrailers = trailerInteractions.getCommentMadeTrailers(userId)
-        return if (commentedTrailers.isNotEmpty()) {
-            ResponseEntity.ok(commentedTrailers)
-        } else {
-            ResponseEntity.noContent().build()
+    @GetMapping("/{userId}/{postId}/states")
+    suspend fun getTrailerInteractionStates(
+        @PathVariable userId: Int,
+        @PathVariable postId: Int
+    ): ResponseEntity<InteractionStates> {
+        return try {
+            val states = trailerInteractions.getTrailerInteractionStates(userId, postId)
+            ResponseEntity.ok(states)
+        } catch (e: Exception) {
+            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build()
         }
     }
 }

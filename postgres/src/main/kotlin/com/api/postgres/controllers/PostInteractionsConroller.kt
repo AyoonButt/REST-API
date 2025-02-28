@@ -1,6 +1,7 @@
 package com.api.postgres.controllers
 
 import com.api.postgres.ApiResponse
+import com.api.postgres.InteractionStates
 import com.api.postgres.UserPostInteractionDto
 import com.api.postgres.services.PostInteractions
 import org.slf4j.Logger
@@ -33,18 +34,6 @@ class PostInteractionsController(
         }
     }
 
-    // Endpoint to update the interaction timestamp for a post
-    @PutMapping("/updateTimestamp")
-    suspend fun updateInteractionTimestamp(
-        @RequestParam postId: Int,
-        @RequestParam userId: Int,
-        @RequestParam timestamp: Long,
-    ): ResponseEntity<String> {
-        logger.info("Updating interaction timestamp for postId: $postId, userId: $userId with timestamp: $timestamp")
-        postInteractionsService.updateInteractionTimestamp(postId, userId, timestamp)
-        logger.info("Timestamp updated successfully for postId: $postId, userId: $userId")
-        return ResponseEntity.ok("Timestamp updated successfully for postId: $postId")
-    }
 
     // Endpoint to get all post interactions for a user
     @GetMapping("/user/{userId}")
@@ -105,17 +94,18 @@ class PostInteractionsController(
         }
     }
 
-    // Endpoint to get all posts where a comment was made by a user
-    @GetMapping("/commented/user/{userId}")
-    suspend fun getCommentMadePosts(@PathVariable userId: Int): ResponseEntity<List<Int>> {
-        logger.info("Fetching posts with comments made by userId: $userId")
-        val commentPosts = postInteractionsService.getCommentMadePosts(userId)
-        return if (commentPosts.isNotEmpty()) {
-            logger.info("Found ${commentPosts.size} posts with comments made by userId: $userId")
-            ResponseEntity.ok(commentPosts)
-        } else {
-            logger.warn("No posts with comments found for userId: $userId")
-            ResponseEntity.status(HttpStatus.NO_CONTENT).build()
+
+    @GetMapping("/{userId}/{postId}/states")
+    suspend fun getInteractionStates(
+        @PathVariable userId: Int,
+        @PathVariable postId: Int
+    ): ResponseEntity<InteractionStates> {
+        return try {
+            val states = postInteractionsService.getPostInteractionStates(userId, postId)
+            ResponseEntity.ok(states)
+        } catch (e: Exception) {
+            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build()
         }
     }
+
 }

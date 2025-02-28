@@ -29,13 +29,6 @@ data class UserRequest(
     @JsonProperty("avoid_genres") val avoidGenres: List<Int>
 )
 
-@JsonIgnoreProperties(ignoreUnknown = true)
-data class UserUpdateRequest(
-    @JsonProperty("user_dto") val userDto: UserDto,
-    @JsonProperty("subscriptions") val subscriptions: List<Int>,
-    @JsonProperty("genres") val genres: List<Int>,
-    @JsonProperty("avoid_genres") val avoidGenres: List<Int>
-)
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class CommentDto(
@@ -46,30 +39,9 @@ data class CommentDto(
     @JsonProperty("content") val content: String,
     @JsonProperty("sentiment") val sentiment: String?,
     @JsonProperty("timestamp") val timestamp: String?,
-    @JsonProperty("parent_comment_id") val parentCommentId: Int? = null
+    @JsonProperty("parent_comment_id") val parentCommentId: Int? = null,
+    @JsonProperty("comment_type") val commentType: String
 )
-
-@JsonIgnoreProperties(ignoreUnknown = true)
-data class ReplyDto(
-    @JsonProperty("post_id") val postId: Int,
-    @JsonProperty("content") val content: String,
-    @JsonProperty("sentiment") val sentiment: String? = null,
-    @JsonProperty("timestamp") val timestamp: String? = null
-)
-
-@JsonIgnoreProperties(ignoreUnknown = true)
-data class UserPostInteractionDto(
-    @JsonProperty("interaction_id") val interactionId: Int?,
-    @JsonProperty("user_id") val userId: Int,
-    @JsonProperty("post_id") val postId: Int,
-    @JsonProperty("time_spent_on_post") val timeSpentOnPost: Long,
-    @JsonProperty("like_state") val likeState: Boolean = false,
-    @JsonProperty("save_state") val saveState: Boolean = false,
-    @JsonProperty("comment_button_pressed") val commentButtonPressed: Boolean = false,
-    @JsonProperty("comment_made") val commentMade: Boolean = false,
-    @JsonProperty("timestamp") val timestamp: String
-)
-
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class CastDto(
@@ -119,18 +91,29 @@ data class PostDto(
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
+data class UserPostInteractionDto(
+    @JsonProperty("interaction_id") val interactionId: Int?,
+    @JsonProperty("user_id") val userId: Int,
+    @JsonProperty("post_id") val postId: Int,
+    @JsonProperty("start_timestamp") val startTimestamp: String,
+    @JsonProperty("end_timestamp") val endTimestamp: String,
+    @JsonProperty("like_state") val likeState: Boolean = false,
+    @JsonProperty("save_state") val saveState: Boolean = false,
+    @JsonProperty("comment_button_pressed") val commentButtonPressed: Boolean = false,
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class TrailerInteractionDto(
     @JsonProperty("interaction_id") val interactionId: Int?,
     @JsonProperty("user_id") val userId: Int,
     @JsonProperty("post_id") val postId: Int,
-    @JsonProperty("time_spent") val timeSpent: Long,
+    @JsonProperty("start_timestamp") val startTimestamp: String,
+    @JsonProperty("end_timestamp") val endTimestamp: String,
     @JsonProperty("replay_count") val replayCount: Int,
     @JsonProperty("is_muted") val isMuted: Boolean,
     @JsonProperty("like_state") val likeState: Boolean,
     @JsonProperty("save_state") val saveState: Boolean,
-    @JsonProperty("comment_button_pressed") val commentButtonPressed: Boolean,
-    @JsonProperty("comment_made") val commentMade: Boolean,
-    @JsonProperty("timestamp") val timestamp: String
+    @JsonProperty("comment_button_pressed") val commentButtonPressed: Boolean
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -172,14 +155,6 @@ data class UserPreferencesDto(
 data class ReplyCountDto(
     @JsonProperty("parent_id") val parentId: Int,
     @JsonProperty("reply_count") val replyCount: Int
-)
-
-@JsonIgnoreProperties(ignoreUnknown = true)
-data class VideoDto(
-    @JsonProperty("video_key") val videoKey: String,
-    @JsonProperty("post_id") val postId: Int,
-    @JsonProperty("tmdb_id") val tmdbId: Int,
-    @JsonProperty("type") val type: String
 )
 
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
@@ -235,8 +210,6 @@ data class PersonDto(
     val creditIds: List<Int>
 )
 
-
-
 data class MediaDto(
     @JsonProperty("tmdb_id")
     val tmdbId: Int,
@@ -283,4 +256,43 @@ data class InfoDto(
     val endTimestamp: String,
     @JsonProperty("user_id")
     val userId: Int
+)
+
+data class UserSubscriptionDto(
+    @JsonProperty("user_id")
+    val userId: Int,
+    @JsonProperty("provider_id")
+    val providerId: Int,
+    @JsonProperty("provider_name")
+    val providerName: String,
+    @JsonProperty("priority")
+    val priority: Int
+)
+
+
+data class UserGenreDto(
+    @JsonProperty("user_id") val userId: Int,
+    @JsonProperty("genre_id") val genreId: Int,
+    @JsonProperty("genre_name") val genreName: String,
+    @JsonProperty("priority") val priority: Int
+)
+
+data class InteractionStates(
+    @JsonProperty("isLiked")val isLiked: Boolean,
+    @JsonProperty("isSaved")val isSaved: Boolean
+)
+
+
+data class UserUpdate(
+    @JsonProperty("language") val language: String? = null,
+    @JsonProperty("region") val region: String? = null,
+    @JsonProperty("minMovie") val minMovie: Int? = null,
+    @JsonProperty("maxMovie")val maxMovie: Int? = null,
+    @JsonProperty("minTV") val minTV: Int? = null,
+    @JsonProperty("maxTV") val maxTV: Int? = null,
+    @JsonProperty("name") val name: String? = null,
+    @JsonProperty("username") val username: String? = null,
+    @JsonProperty("email") val email: String? = null,
+    @JsonProperty("oldestDate") val oldestDate: String? = null,
+    @JsonProperty("recentDate") val recentDate: String? = null
 )

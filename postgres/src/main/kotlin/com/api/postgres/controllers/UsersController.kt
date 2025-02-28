@@ -1,11 +1,13 @@
 package com.api.postgres.controllers
 
 
+import com.api.postgres.ApiResponse
 import com.api.postgres.UserPreferencesDto
 import com.api.postgres.UserRequest
-import com.api.postgres.UserUpdateRequest
+import com.api.postgres.UserUpdate
 import com.api.postgres.models.UserEntity
 import com.api.postgres.services.UsersService
+import com.google.gson.Gson
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
@@ -20,7 +22,7 @@ class UsersController(private val usersService: UsersService) {
     private val logger: Logger = LoggerFactory.getLogger(UsersController::class.java)
 
     @GetMapping("/username")
-    suspend fun getUserByUsername(@RequestParam username: String): ResponseEntity<UserEntity?> {
+    suspend fun getUserByUsername(@RequestParam username: String): ResponseEntity<UserEntity> {
         logger.info("Fetching user for username: $username")
         return try {
             val userResult = usersService.getUserByUsername(username)
@@ -28,6 +30,9 @@ class UsersController(private val usersService: UsersService) {
                 onSuccess = { user ->
                     if (user != null) {
                         logger.info("Successfully found user for username: $username")
+                        val gson = Gson()
+                        val jsonString = gson.toJson(user)
+                        logger.info("Raw JSON response: $jsonString")
                         ResponseEntity.ok(user)
                     } else {
                         logger.info("No user found for username: $username")
@@ -61,28 +66,25 @@ class UsersController(private val usersService: UsersService) {
             ResponseEntity.status(HttpStatus.BAD_REQUEST).build()
         }
     }
-
     @PutMapping("/{userId}")
     suspend fun updateUser(
         @PathVariable userId: Int,
-        @RequestBody request: UserUpdateRequest
-    ): ResponseEntity<String> {
-        logger.info("Updating user: $userId")
-        return try {
-            usersService.updateUser(
-                userId,
-                request.userDto,
-                request.subscriptions,
-                request.genres,
-                request.avoidGenres
-            )
-            ResponseEntity.ok("User updated successfully")
-        } catch (e: Exception) {
-            logger.error("Error updating user: ${e.message}", e)
-            ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body("Error updating user: ${e.message}")
-        }
+        @RequestBody updates: UserUpdate
+    ): ResponseEntity<UserEntity> {
+        return usersService.updateUserProperties(userId, updates).fold(
+            onSuccess = { user ->
+                user?.let { ResponseEntity.ok(it) }
+                    ?: ResponseEntity.notFound().build()
+            },
+            onFailure = { exception ->
+                when (exception) {
+                    is NoSuchElementException -> ResponseEntity.notFound().build()
+                    else -> ResponseEntity.internalServerError().build()
+                }
+            }
+        )
     }
+
 
     @PostMapping("/check-credentials")
     suspend fun checkCredentials(
@@ -101,15 +103,21 @@ class UsersController(private val usersService: UsersService) {
     suspend fun updateLogin(
         @PathVariable username: String,
         @RequestParam timestamp: String
-    ): ResponseEntity<String> {
+    ): ResponseEntity<ApiResponse> {
         return try {
             logger.info("Updating login for user: $username with timestamp: $timestamp")
             usersService.updateRecentLogin(username, timestamp)
-            ResponseEntity.ok("Login timestamp updated")
+            ResponseEntity.ok(ApiResponse(
+                success = true,
+                message = "Login timestamp updated"
+            ))
         } catch (e: Exception) {
             logger.error("Failed to update login timestamp", e)
             ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body("Error updating login timestamp")
+                .body(ApiResponse(
+                    success = false,
+                    message = "Error updating login timestamp"
+                ))
         }
     }
 

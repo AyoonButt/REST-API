@@ -1,7 +1,6 @@
 package com.api.postgres.controllers
 
 import com.api.postgres.PostDto
-import com.api.postgres.VideoDto
 import com.api.postgres.services.Posts
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -74,16 +73,6 @@ class PostsController(
         }
     }
 
-    @GetMapping("/videos")
-    suspend fun getVideos(
-        @RequestParam(defaultValue = "10") limit: Int,
-        @RequestParam(defaultValue = "0") offset: Int
-    ): ResponseEntity<List<VideoDto>> {
-        logger.info("Fetching videos with limit: $limit, offset: $offset")
-        val videos = postsService.fetchVideosFromDatabase(limit, offset)
-        return if (videos.isNotEmpty()) ResponseEntity.ok(videos)
-        else ResponseEntity.status(HttpStatus.NO_CONTENT).build()
-    }
 
     @GetMapping("/{postId}")
     suspend fun getPost(@PathVariable postId: Int): ResponseEntity<PostDto> {
@@ -101,5 +90,31 @@ class PostsController(
         return postId?.let {
             ResponseEntity.ok(mapOf("postId" to it))
         } ?: ResponseEntity.status(HttpStatus.NOT_FOUND).build()
+    }
+
+    @GetMapping("/paged")
+    suspend fun getPagedPostDtos(
+        @RequestParam interactionIds: List<Int>,
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "20") pageSize: Int
+    ): ResponseEntity<List<PostDto>> {
+        return try {
+            // Handle pagination here
+            val offset = page * pageSize
+            if (offset >= interactionIds.size) {
+                return ResponseEntity.ok(emptyList())
+            }
+
+            val pagedIds = interactionIds.subList(
+                offset,
+                minOf(offset + pageSize, interactionIds.size)
+            )
+
+            // Call service with just the IDs for this page
+            val posts = postsService.getPostDtosForInteractionIds(pagedIds)
+            ResponseEntity.ok(posts)
+        } catch (e: Exception) {
+            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build()
+        }
     }
 }

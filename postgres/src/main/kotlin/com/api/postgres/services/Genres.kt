@@ -1,16 +1,32 @@
 package com.api.postgres.services
 
+import com.api.postgres.UserGenreDto
+import com.api.postgres.UserGenreProjection
 import com.api.postgres.models.GenreEntity
+import com.api.postgres.models.UserGenreId
 import com.api.postgres.repositories.GenreRepository
+import com.api.postgres.repositories.UserGenresRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
 @Service
-class Genres(private val genreRepository: GenreRepository) {
+class Genres(private val genreRepository: GenreRepository,
+             private val userGenresRepository: UserGenresRepository) {
+
+    private val logger: Logger = LoggerFactory.getLogger(Genres::class.java)
 
     private val genresCache: MutableSet<GenreEntity> = mutableSetOf()
+
+    private fun UserGenreProjection.toDto() = UserGenreDto(
+        userId = userId,
+        genreId = genreId,
+        genreName = genreName,
+        priority = priority
+    )
 
     @Transactional
     fun insertGenres() {
@@ -101,5 +117,53 @@ class Genres(private val genreRepository: GenreRepository) {
             }
         }
     }
+
+    @Transactional
+    suspend fun getUserGenres(userId: Int): Result<List<UserGenreDto>> = withContext(Dispatchers.IO) {
+        try {
+            val projections = userGenresRepository.findProjectedByUserIdOrderByPriority(userId)
+            Result.success(projections.map { it.toDto() })
+        } catch (e: Exception) {
+            logger.error("Error getting user genres for userId $userId: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    @Transactional
+    suspend fun updateUserGenres(userId: Int, newGenres: List<UserGenreDto>): Result<List<UserGenreDto>> = withContext(Dispatchers.IO) {
+        try {
+            // Get current genres using projection
+            val currentGenres = userGenresRepository.findProjectedByUserIdOrderByPriority(userId)
+
+            // Find genres to remove
+            val newGenreIds = newGenres.map { it.genreId }
+            val genresToRemove = currentGenres.filter {
+                !newGenreIds.contains(it.genreId)
+            }
+
+            // Remove old genres
+            genresToRemove.forEach { projection ->
+                userGenresRepository.deleteById(UserGenreId(projection.userId, projection.genreId))
+            }
+
+            // Update or add genres
+            newGenres.forEach { dto ->
+                userGenresRepository.insertUserGenre(
+                    userId = userId,
+                    genreId = dto.genreId,
+                    priority = dto.priority
+                )
+            }
+
+            // Return updated genres using projection
+            val updatedProjections = userGenresRepository.findProjectedByUserIdOrderByPriority(userId)
+            Result.success(updatedProjections.map { it.toDto() })
+
+        } catch (e: Exception) {
+            logger.error("Error updating user genres for userId $userId: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
 
 }

@@ -5,12 +5,16 @@ import com.api.postgres.CastProjection
 import com.api.postgres.CommentProjection
 import com.api.postgres.CrewProjection
 import com.api.postgres.InfoItemProjection
+import com.api.postgres.InteractionStatesProjection
 import com.api.postgres.PostProjection
 import com.api.postgres.ReplyCountProjection
+import com.api.postgres.TimestampProjection
 import com.api.postgres.TrailerInteractionProjection
+import com.api.postgres.UserGenreProjection
 import com.api.postgres.UserPostInteractionProjection
 import com.api.postgres.UserPreferencesProjection
 import com.api.postgres.UserProjection
+import com.api.postgres.UserSubscriptionProjection
 import com.api.postgres.models.*
 import jakarta.transaction.Transactional
 
@@ -87,7 +91,8 @@ interface CommentRepository : JpaRepository<CommentEntity, Int> {
             c.content as content,
             c.sentiment as sentiment,
             c.timestamp as timestamp,
-            c.parent_comment_id as parentCommentId
+            c.parent_comment_id as parentCommentId,
+            c.comment_type as commentType
         FROM comments c
         JOIN users u ON c.user_id = u.user_id
         WHERE c.post_id = :postId
@@ -106,8 +111,8 @@ interface CommentRepository : JpaRepository<CommentEntity, Int> {
     @Transactional
     @Query(
         value = """
-    INSERT INTO comments (user_id, post_id, content, sentiment, timestamp, parent_comment_id)
-    VALUES (:userId, :postId, :content, :sentiment, :timestamp, :parentCommentId)
+    INSERT INTO comments (user_id, post_id, content, sentiment, timestamp, parent_comment_id, comment_type)
+    VALUES (:userId, :postId, :content, :sentiment, :timestamp, :parentCommentId, :comment_type)
     """,
         nativeQuery = true
     )
@@ -117,8 +122,9 @@ interface CommentRepository : JpaRepository<CommentEntity, Int> {
         @Param("content") content: String,
         @Param("sentiment") sentiment: String?,
         @Param("timestamp") timestamp: String?,
-        @Param("parentCommentId") parentCommentId: Int?
-    ): Int  // Will return number of rows affected
+        @Param("parentCommentId") parentCommentId: Int?,
+        @Param("comment_type") commentType: String
+    ): Int
 
     // Add separate query for getting the last inserted ID
     @Query(
@@ -137,7 +143,8 @@ interface CommentRepository : JpaRepository<CommentEntity, Int> {
         c.content as content,
         c.sentiment as sentiment,
         c.timestamp as timestamp,
-        c.parent_comment_id as parentCommentId
+        c.parent_comment_id as parentCommentId,
+        c.comment_type ad commentType
     FROM comments c
     JOIN users u ON c.user_id = u.user_id
     WHERE c.parent_comment_id = :parentId
@@ -154,8 +161,7 @@ interface CommentRepository : JpaRepository<CommentEntity, Int> {
         @Param("offset") offset: Int
     ): List<CommentProjection>
 
-    @Query(
-        value = """
+    @Query("""
     WITH RECURSIVE reply_hierarchy AS (
         -- Base case: direct replies to the parent comment
         SELECT 
@@ -167,6 +173,7 @@ interface CommentRepository : JpaRepository<CommentEntity, Int> {
             c.sentiment,
             c.timestamp,
             c.parent_comment_id,
+            c.comment_type,
             1 as depth
         FROM comments c
         JOIN users u ON c.user_id = u.user_id
@@ -184,9 +191,10 @@ interface CommentRepository : JpaRepository<CommentEntity, Int> {
             c.sentiment,
             c.timestamp,
             c.parent_comment_id,
+            c.comment_type,
             CASE 
                 WHEN rh.depth >= 10 THEN rh.depth
-                ELSE rh.depth + 1 
+                ELSE rh.depth + 1
             END as depth
         FROM comments c
         JOIN users u ON c.user_id = u.user_id
@@ -202,13 +210,12 @@ interface CommentRepository : JpaRepository<CommentEntity, Int> {
         sentiment,
         timestamp,
         parent_comment_id as parentCommentId,
+        comment_type as commentType,
         depth
-    FROM reply_hierarchy
-    ORDER BY timestamp DESC
+    FROM reply_hierarchy 
+    ORDER BY timestamp DESC 
     LIMIT :limit OFFSET :offset
-    """,
-        nativeQuery = true
-    )
+""", nativeQuery = true)
     fun findRepliesByParentId(
         @Param("parentId") parentId: Int,
         @Param("limit") limit: Int,
@@ -238,13 +245,16 @@ interface CommentRepository : JpaRepository<CommentEntity, Int> {
 
 
     @Query("""
-    SELECT DISTINCT u.username 
-    FROM CommentEntity c 
-    LEFT JOIN c.parentComment p 
-    LEFT JOIN p.user u 
-    WHERE c.commentId = :commentId
-    """)
-    fun findParentCommentUsername(@Param("commentId") commentId: Int): String?
+   SELECT u.username
+   FROM comments c
+   JOIN users u ON u.user_id = 
+       (SELECT user_id 
+        FROM comments 
+        WHERE comment_id = c.parent_comment_id)
+   WHERE c.parent_comment_id = :parentCommentId
+""", nativeQuery = true)
+    fun findParentCommentUsername(@Param("parentCommentId") parentCommentId: Int): String?
+
 
     @Query(
         value = """
@@ -276,6 +286,61 @@ interface CommentRepository : JpaRepository<CommentEntity, Int> {
         nativeQuery = true
     )
     fun getReplyCountsForComments(@Param("parentIds") parentIds: List<Int>): List<ReplyCountProjection>
+
+    @Query("""
+    SELECT 
+        c.comment_id as commentId,
+        c.user_id as userId,
+        u.username as username,
+        c.post_id as postId,
+        c.content as content,
+        c.sentiment as sentiment,
+        c.timestamp as timestamp,
+        c.parent_comment_id as parentCommentId,
+        c.comment_type as commentType
+    FROM comments c
+    JOIN users u ON c.user_id = u.user_id
+    WHERE c.user_id = :userId 
+    AND c.comment_type = :commentType
+    ORDER BY c.timestamp DESC
+    LIMIT :limit
+    OFFSET :offset
+""", nativeQuery = true)
+    fun findCommentsByUserIdAndType(
+        @Param("userId") userId: Int,
+        @Param("commentType") commentType: String,
+        @Param("limit") limit: Int,
+        @Param("offset") offset: Int
+    ): List<CommentProjection>
+
+
+    @Query("""
+WITH RECURSIVE comment_hierarchy AS (
+    -- Base case: start with the parent comment
+    SELECT c.comment_id, c.user_id, u.username, c.post_id, c.content, 
+           c.sentiment, c.timestamp, c.parent_comment_id, c.comment_type
+    FROM comments c
+    JOIN users u ON c.user_id = u.user_id
+    WHERE c.comment_id = :parentCommentId
+    
+    UNION ALL
+    
+    -- Recursive case: keep joining with parents until we find one with no parent
+    SELECT c.comment_id, c.user_id, u.username, c.post_id, c.content, 
+           c.sentiment, c.timestamp, c.parent_comment_id, c.comment_type
+    FROM comments c
+    JOIN users u ON c.user_id = u.user_id
+    INNER JOIN comment_hierarchy ch ON c.comment_id = ch.parent_comment_id
+)
+SELECT comment_id as commentId, user_id as userId, username, post_id as postId,
+       content, sentiment, timestamp, parent_comment_id as parentCommentId, 
+       comment_type as commentType
+FROM comment_hierarchy
+WHERE parent_comment_id IS NULL
+LIMIT 1
+""", nativeQuery = true)
+    fun findRootCommentWithData(parentCommentId: Int): CommentProjection?
+
 }
 
 @Repository
@@ -284,14 +349,13 @@ interface UserTrailerInteractionRepository : JpaRepository<UserTrailerInteractio
         SELECT t.interactionId as interactionId, 
                t.user.userId as userId, 
                t.post.postId as postId, 
-               t.timeSpent as timeSpent,
+               t.startTimestamp as startTimestamp,
+               t.endTimestamp as endTimestamp,
                t.replayCount as replayCount, 
                t.isMuted as isMuted, 
                t.likeState as likeState, 
                t.saveState as saveState,
-               t.commentButtonPressed as commentButtonPressed, 
-               t.commentMade as commentMade, 
-               t.timestamp as timestamp
+               t.commentButtonPressed as commentButtonPressed
         FROM UserTrailerInteraction t
         WHERE t.user.userId = :userId
     """)
@@ -301,14 +365,13 @@ interface UserTrailerInteractionRepository : JpaRepository<UserTrailerInteractio
         SELECT t.interactionId as interactionId, 
                t.user.userId as userId, 
                t.post.postId as postId, 
-               t.timeSpent as timeSpent,
+               t.startTimestamp as startTimestamp,
+               t.endTimestamp as endTimestamp,
                t.replayCount as replayCount, 
                t.isMuted as isMuted, 
                t.likeState as likeState, 
                t.saveState as saveState,
-               t.commentButtonPressed as commentButtonPressed, 
-               t.commentMade as commentMade, 
-               t.timestamp as timestamp
+               t.commentButtonPressed as commentButtonPressed
         FROM UserTrailerInteraction t
         WHERE t.user.userId = :userId AND t.post.postId = :postId
     """)
@@ -320,69 +383,80 @@ interface UserTrailerInteractionRepository : JpaRepository<UserTrailerInteractio
     @Modifying
     @Transactional
     @Query("""
-        UPDATE UserTrailerInteraction t 
-        SET t.timestamp = :timestamp 
-        WHERE t.post.postId = :postId
-    """)
-    fun updateTimestamp(
-        @Param("postId") postId: Int,
-        @Param("timestamp") timestamp: String
-    )
-
-    @Modifying
-    @Transactional
-    @Query("""
-    INSERT INTO user_trailer_interactions (
-        user_id, post_id, time_spent_on_trailer, replay_count, is_muted,
-        like_state, save_state, comment_button_pressed,
-        comment_made, timestamp
-    ) VALUES (
-        :userId, :postId, :timeSpent, :replayCount, :isMuted,
-        :likeState, :saveState, :commentButtonPressed,
-        :commentMade, :timestamp
-    )
+   INSERT INTO user_trailer_interactions (
+       user_id, post_id, start_timestamp, end_timestamp, replay_count, is_muted,
+       like_state, save_state, comment_button_pressed
+   ) VALUES (
+       :userId, :postId, :startTimestamp, :endTimestamp, :replayCount, :isMuted,
+       :likeState, :saveState, :commentButtonPressed
+   )
 """, nativeQuery = true)
     fun insertInteraction(
         @Param("userId") userId: Int,
         @Param("postId") postId: Int,
-        @Param("timeSpent") timeSpent: Long,
+        @Param("startTimestamp") startTimestamp: String,
+        @Param("endTimestamp") endTimestamp: String,
         @Param("replayCount") replayCount: Int,
         @Param("isMuted") isMuted: Boolean,
         @Param("likeState") likeState: Boolean,
         @Param("saveState") saveState: Boolean,
-        @Param("commentButtonPressed") commentButtonPressed: Boolean,
-        @Param("commentMade") commentMade: Boolean,
-        @Param("timestamp") timestamp: String
+        @Param("commentButtonPressed") commentButtonPressed: Boolean
     ): Int
 
     @Query("""
-        SELECT p.postId 
-        FROM UserTrailerInteraction t 
-        JOIN t.post p 
-        WHERE t.user.userId = :userId AND t.likeState = true 
-        ORDER BY t.timestamp DESC
-    """)
-    fun findLikedPostIds(@Param("userId") userId: Int): List<Int>
+    SELECT DISTINCT p.postId as postId, t.startTimestamp as startTimestamp
+    FROM UserTrailerInteraction t 
+    JOIN t.post p 
+    WHERE t.user.userId = :userId 
+    AND t.likeState = true
+    AND t.startTimestamp = (
+        SELECT MAX(t2.startTimestamp)
+        FROM UserTrailerInteraction t2
+        WHERE t2.post.postId = p.postId 
+        AND t2.user.userId = t.user.userId
+    )
+    ORDER BY t.startTimestamp DESC
+""")
+    fun findLikedPostIds(@Param("userId") userId: Int): List<TimestampProjection>
 
     @Query("""
-        SELECT p.postId 
-        FROM UserTrailerInteraction t 
-        JOIN t.post p 
-        WHERE t.user.userId = :userId AND t.saveState = true 
-        ORDER BY t.timestamp DESC
-    """)
-    fun findSavedPostIds(@Param("userId") userId: Int): List<Int>
+    SELECT DISTINCT p.postId as postId, t.startTimestamp as startTimestamp
+    FROM UserTrailerInteraction t 
+    JOIN t.post p 
+    WHERE t.user.userId = :userId 
+    AND t.saveState = true
+    AND t.startTimestamp = (
+        SELECT MAX(t2.startTimestamp)
+        FROM UserTrailerInteraction t2
+        WHERE t2.post.postId = p.postId 
+        AND t2.user.userId = t.user.userId
+    )
+    ORDER BY t.startTimestamp DESC
+""")
+    fun findSavedPostIds(@Param("userId") userId: Int): List<TimestampProjection>
+
+
+
 
     @Query("""
-        SELECT p.postId 
-        FROM UserTrailerInteraction t 
-        JOIN t.post p 
-        WHERE t.user.userId = :userId AND t.commentMade = true 
-        ORDER BY t.timestamp DESC
-    """)
-    fun findCommentMadePostIds(@Param("userId") userId: Int): List<Int>
+    SELECT 
+        COALESCE(like_state, false) as likeState,
+        COALESCE(save_state, false) as saveState
+    FROM user_trailer_interactions
+    WHERE user_id = :userId 
+    AND post_id = :postId
+    AND start_timestamp = (
+        SELECT MAX(start_timestamp)
+        FROM user_trailer_interactions
+        WHERE user_id = :userId 
+        AND post_id = :postId
+    )
+""", nativeQuery = true)
+    fun getTrailerInteractionStates(
+        @Param("userId") userId: Int,
+        @Param("postId") postId: Int
+    ): InteractionStatesProjection?
 }
-
 
 @Repository
 interface UserPostInteractionRepository : JpaRepository<UserPostInteraction, Long> {
@@ -390,34 +464,35 @@ interface UserPostInteractionRepository : JpaRepository<UserPostInteraction, Lon
     @Modifying
     @Transactional
     @Query("""
-        INSERT INTO user_post_interactions 
-        (user_id, post_id, time_spent_on_post, like_state, save_state, 
-         comment_button_pressed, comment_made, timestamp)
-        VALUES (:userId, :postId, :timeSpentOnPost, :likeState, :saveState, 
-                :commentButtonPressed, :commentMade, :timestamp)
-    """, nativeQuery = true)
+    INSERT INTO user_post_interactions 
+    (user_id, post_id, start_timestamp, end_timestamp, like_state, save_state, 
+     comment_button_pressed)
+    VALUES (:userId, :postId, :startTimestamp, :endTimestamp, :likeState, :saveState, 
+            :commentButtonPressed)
+""", nativeQuery = true)
     fun insertInteraction(
         @Param("userId") userId: Int,
         @Param("postId") postId: Int,
-        @Param("timeSpentOnPost") timeSpentOnPost: Long,
+        @Param("startTimestamp") startTimestamp: String,
+        @Param("endTimestamp") endTimestamp: String,
         @Param("likeState") likeState: Boolean,
         @Param("saveState") saveState: Boolean,
         @Param("commentButtonPressed") commentButtonPressed: Boolean,
-        @Param("commentMade") commentMade: Boolean,
-        @Param("timestamp") timestamp: String
     )
 
     @Modifying
     @Transactional
     @Query("""
         UPDATE user_post_interactions 
-        SET timestamp = :timestamp
+        SET start_timestamp = :startTimestamp,
+            end_timestamp = :endTimestamp
         WHERE user_id = :userId AND post_id = :postId
     """, nativeQuery = true)
-    fun updateTimestamp(
+    fun updateTimestamps(
         @Param("userId") userId: Int,
         @Param("postId") postId: Int,
-        @Param("timestamp") timestamp: String
+        @Param("startTimestamp") startTimestamp: String,
+        @Param("endTimestamp") endTimestamp: String
     )
 
     @Query(
@@ -426,15 +501,14 @@ interface UserPostInteractionRepository : JpaRepository<UserPostInteraction, Lon
             i.interaction_id as interactionId,
             i.user_id as userId,
             i.post_id as postId,
-            i.time_spent_on_post as timeSpentOnPost,
+            i.start_timestamp as startTimestamp,
+            i.end_timestamp as endTimestamp,
             i.like_state as likeState,
             i.save_state as saveState,
-            i.comment_button_pressed as commentButtonPressed,
-            i.comment_made as commentMade,
-            i.timestamp
+            i.comment_button_pressed as commentButtonPressed
         FROM user_post_interactions i
         WHERE i.user_id = :userId
-        ORDER BY i.timestamp DESC
+        ORDER BY i.start_timestamp DESC
         """,
         nativeQuery = true
     )
@@ -446,12 +520,11 @@ interface UserPostInteractionRepository : JpaRepository<UserPostInteraction, Lon
             i.interaction_id as interactionId,
             i.user_id as userId,
             i.post_id as postId,
-            i.time_spent_on_post as timeSpentOnPost,
+            i.start_timestamp as startTimestamp,
+            i.end_timestamp as endTimestamp,
             i.like_state as likeState,
             i.save_state as saveState,
-            i.comment_button_pressed as commentButtonPressed,
-            i.comment_made as commentMade,
-            i.timestamp
+            i.comment_button_pressed as commentButtonPressed
         FROM user_post_interactions i
         WHERE i.user_id = :userId 
         AND i.post_id = :postId
@@ -463,17 +536,52 @@ interface UserPostInteractionRepository : JpaRepository<UserPostInteraction, Lon
         @Param("postId") postId: Int
     ): UserPostInteractionProjection
 
-    // These queries are already optimized as they only return post IDs
-    @Query("SELECT DISTINCT u.post.postId FROM UserPostInteraction u WHERE u.user.userId = :userId AND u.likeState = true ORDER BY u.timestamp DESC")
-    fun findLikedPostsByUserUserId(@Param("userId") userId: Int): List<Int>
+    @Query("""
+    SELECT DISTINCT u.post.postId as postId, u.startTimestamp as startTimestamp
+    FROM UserPostInteraction u
+    WHERE u.user.userId = :userId 
+    AND u.likeState = true
+    AND u.startTimestamp = (
+        SELECT MAX(u2.startTimestamp)
+        FROM UserPostInteraction u2
+        WHERE u2.post.postId = u.post.postId 
+        AND u2.user.userId = u.user.userId
+    )
+    ORDER BY u.startTimestamp DESC
+""")
+    fun findLikedPostsByUserUserId(@Param("userId") userId: Int): List<TimestampProjection>
 
-    @Query("SELECT DISTINCT u.post.postId FROM UserPostInteraction u WHERE u.user.userId = :userId AND u.saveState = true ORDER BY u.timestamp DESC")
-    fun findSavedPostsByUserUserId(@Param("userId") userId: Int): List<Int>
+    @Query("""
+    SELECT DISTINCT u.post.postId as postId, u.startTimestamp as startTimestamp
+    FROM UserPostInteraction u
+    WHERE u.user.userId = :userId 
+    AND u.saveState = true
+    AND u.startTimestamp = (
+        SELECT MAX(u2.startTimestamp)
+        FROM UserPostInteraction u2
+        WHERE u2.post.postId = u.post.postId 
+        AND u2.user.userId = u.user.userId
+    )
+    ORDER BY u.startTimestamp DESC
+""")
+    fun findSavedPostsByUserUserId(@Param("userId") userId: Int): List<TimestampProjection>
 
-    @Query("SELECT DISTINCT u.post.postId FROM UserPostInteraction u WHERE u.user.userId = :userId AND u.commentMade = true ORDER BY u.timestamp DESC")
-    fun findCommentMadePostsByUserUserId(@Param("userId") userId: Int): List<Int>
+    @Query("""
+    SELECT 
+        COALESCE(like_state, false) as likeState,
+        COALESCE(save_state, false) as saveState
+    FROM user_post_interactions
+    WHERE user_id = :userId 
+    AND post_id = :postId
+    ORDER BY start_timestamp DESC
+    LIMIT 1
+""", nativeQuery = true)
+    fun getPostInteractionStates(
+        @Param("userId") userId: Int,
+        @Param("postId") postId: Int
+    ): InteractionStatesProjection?
+
 }
-
 
 @Repository
 interface PostRepository : JpaRepository<PostEntity, Int> {
@@ -557,6 +665,38 @@ interface PostRepository : JpaRepository<PostEntity, Int> {
         nativeQuery = true
     )
     fun incrementTrailerLikeCount(@Param("postId") postId: Int)
+
+    @Query(
+        value = """
+    SELECT 
+        p.post_id as postId,
+        p.tmdb_id as tmdbId,
+        p.type,
+        p.title,
+        p.subscription,
+        p.release_date as releaseDate,
+        p.overview,
+        p.poster_path as posterPath,
+        p.vote_average as voteAverage,
+        p.vote_count as voteCount,
+        p.original_language as originalLanguage,
+        p.original_title as originalTitle,
+        p.popularity,
+        p.genre_ids as genreIds,
+        p.post_like_count as postLikeCount,
+        p.trailer_like_count as trailerLikeCount,
+        p.video_key as videoKey    
+    FROM posts p 
+    WHERE p.post_id IN (:postIds)
+    ORDER BY POSITION(',' || p.post_id || ',' in ',' || array_to_string(:interactionIds, ',') || ',')
+    LIMIT :limit OFFSET :offset
+    """,
+        nativeQuery = true
+    )
+    fun findPostDtosByIdsWithPaging(
+        @Param("interactionIds") interactionIds: List<Int>
+    ): List<PostProjection>
+
 }
 
 @Repository
@@ -614,15 +754,15 @@ interface CastRepository : JpaRepository<CastEntity, Int> {
     @Transactional
     @Query("""
         INSERT INTO cast_members (
-            post_id, person_id, name, gender, known_for_department,
+            tmdb_id, person_id, name, gender, known_for_department,
             character, episode_count, order_index, popularity, profile_path
         ) VALUES (
-            :postId, :personId, :name, :gender, :knownForDepartment,
+            :tmdbId, :personId, :name, :gender, :knownForDepartment,
             :character, :episodeCount, :orderIndex, :popularity, :profilePath
         )
     """, nativeQuery = true)
     fun insertCast(
-        @Param("postId") postId: Int,
+        @Param("tmdbId") tmdbId: Int,
         @Param("personId") personId: Int,
         @Param("name") name: String,
         @Param("gender") gender: Int,
@@ -658,17 +798,18 @@ interface CrewRepository : JpaRepository<CrewEntity, Int> {
     fun findDtosByPostId(@Param("postId") postId: Int): List<CrewProjection>
 
     @Modifying
+    @Transactional
     @Query("""
         INSERT INTO crew_members (
-            post_id, person_id, name, gender, known_for_department,
+            tmdb_id, person_id, name, gender, known_for_department,
             job, department, episode_count, popularity, profile_path
         ) VALUES (
-            :postId, :personId, :name, :gender, :knownForDepartment,
+            :tmdbId, :personId, :name, :gender, :knownForDepartment,
             :job, :department, :episodeCount, :popularity, :profilePath
         )
     """, nativeQuery = true)
     fun insertCrew(
-        @Param("postId") postId: Int,
+        @Param("tmdbId") tmdbId: Int,
         @Param("personId") personId: Int,
         @Param("name") name: String,
         @Param("gender") gender: Int,
@@ -743,22 +884,25 @@ interface UserRepository : JpaRepository<UserEntity, Int> {
     ): UserEntity?
 
 
+
     @Query("""
-    SELECT u.userId as userId,
-           u.language as language,
-           u.region as region,
-           u.minMovie as minMovie,
-           u.maxMovie as maxMovie,
-           u.minTV as minTV,
-           u.maxTV as maxTV,
-           u.oldestDate as oldestDate,
-           u.recentDate as recentDate,
-           (SELECT us.id.providerId FROM UserSubscription us WHERE us.user.userId = u.userId) as subscriptions,
-           (SELECT ug.id.genreId FROM UserGenres ug WHERE ug.user.userId = u.userId) as genreIds,
-           (SELECT avg.id.genreId FROM UserAvoidGenres avg WHERE avg.user.userId = u.userId) as avoidGenreIds
-    FROM UserEntity u
-    WHERE u.userId = :userId
-""")
+    SELECT 
+        u.user_id AS userId,
+        u.language AS language,
+        u.region AS region,
+        u.min_movie AS minMovie,
+        u.max_movie AS maxMovie,
+        u.min_tv AS minTv,
+        u.max_tv AS maxTv,
+        u.oldest_date AS oldestDate,
+        u.recent_date AS recentDate,
+        (SELECT ARRAY_AGG(provider_id) FROM user_subscriptions WHERE user_id = u.user_id) AS providerIds,
+        (SELECT ARRAY_AGG(genre_id) FROM user_genres WHERE user_id = u.user_id) AS genreIds,
+        (SELECT ARRAY_AGG(genre_id) FROM user_avoid_genres WHERE user_id = u.user_id) AS avoidGenreIds
+    FROM users u 
+    WHERE u.user_id = :userId
+""", nativeQuery = true)
+
     fun findUserPreferencesById(userId: Int): UserPreferencesProjection?
 
     @Modifying
@@ -772,11 +916,26 @@ interface UserRepository : JpaRepository<UserEntity, Int> {
 
 @Repository
 interface UserGenresRepository : JpaRepository<UserGenres, UserGenreId> {
-    @Query("SELECT COALESCE(MAX(ug.priority), 0) FROM UserGenres ug WHERE ug.user.userId = :userId")
+    @Query("""
+        SELECT ug.id.userId as userId, 
+               ug.id.genreId as genreId, 
+               g.genreName as genreName, 
+               ug.priority as priority 
+        FROM UserGenres ug 
+        JOIN ug.genre g 
+        WHERE ug.id.userId = :userId 
+        ORDER BY ug.priority
+    """)
+    fun findProjectedByUserIdOrderByPriority(userId: Int): List<UserGenreProjection>
+
+    @Query("SELECT ug.id.genreId FROM UserGenres ug WHERE ug.id.userId = :userId ORDER BY ug.priority")
+    fun findGenreIdsByUserId(@Param("userId") userId: Int): List<Int>
+
+    @Query("SELECT COALESCE(MAX(ug.priority), 0) FROM UserGenres ug WHERE ug.id.userId = :userId")
     fun findMaxPriorityByUserId(@Param("userId") userId: Int): Int
 
-    @Query("SELECT ug.id.genreId FROM UserGenres ug WHERE ug.user.userId = :userId ORDER BY ug.priority")
-    fun findGenreIdsByUserId(@Param("userId") userId: Int): List<Int>
+    @Query("SELECT ug.id.genreId FROM UserGenres ug WHERE ug.id.userId = :userId ORDER BY ug.priority")
+    fun findGenreIdsByUserIdOrderedByPriority(@Param("userId") userId: Int): List<Int>
 
     @Modifying
     @Query("""
@@ -792,13 +951,22 @@ interface UserGenresRepository : JpaRepository<UserGenres, UserGenreId> {
 
 @Repository
 interface UserSubscriptionRepository : JpaRepository<UserSubscription, UserSubscriptionId> {
-    @Query("SELECT COALESCE(MAX(us.priority), 0) FROM UserSubscription us WHERE us.user.userId = :userId")
-    fun findMaxPriorityByUserId(@Param("userId") userId: Int): Int
+    @Query("""
+        SELECT us.id.userId as userId, 
+               us.id.providerId as providerId, 
+               p.providerName as providerName, 
+               us.priority as priority 
+        FROM UserSubscription us 
+        JOIN us.provider p 
+        WHERE us.id.userId = :userId 
+        ORDER BY us.priority
+    """)
+    fun findProjectedByUserIdOrderByPriority(userId: Int): List<UserSubscriptionProjection>
 
     @Query("""
         SELECT us.id.providerId 
         FROM UserSubscription us 
-        WHERE us.user.userId = :userId 
+        WHERE us.id.userId = :userId 
         ORDER BY us.priority ASC
     """)
     fun findProviderIdsByUserIdSortedByPriority(@Param("userId") userId: Int): List<Int>
@@ -813,6 +981,9 @@ interface UserSubscriptionRepository : JpaRepository<UserSubscription, UserSubsc
         @Param("providerId") providerId: Int,
         @Param("priority") priority: Int
     )
+
+    @Query("SELECT MAX(us.priority) FROM UserSubscription us WHERE us.id.userId = :userId")
+    fun findMaxPriorityByUserId(@Param("userId") userId: Int): Int?
 }
 
 @Repository

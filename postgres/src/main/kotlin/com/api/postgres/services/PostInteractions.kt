@@ -1,5 +1,6 @@
 package com.api.postgres.services
 
+import com.api.postgres.InteractionStates
 import com.api.postgres.UserPostInteractionDto
 import com.api.postgres.UserPostInteractionProjection
 import com.api.postgres.repositories.UserPostInteractionRepository
@@ -20,43 +21,29 @@ class PostInteractions(private val interactionRepository: UserPostInteractionRep
         interactionId = interactionId,
         userId = userId,
         postId = postId,
-        timeSpentOnPost = timeSpentOnPost,
+        startTimestamp = startTimestamp,
+        endTimestamp = endTimestamp,
         likeState = likeState,
         saveState = saveState,
-        commentButtonPressed = commentButtonPressed,
-        commentMade = commentMade,
-        timestamp = timestamp
+        commentButtonPressed = commentButtonPressed
     )
 
     @Transactional
     suspend fun saveInteractionData(interactionData: UserPostInteractionDto) {
         try {
-
             interactionRepository.insertInteraction(
                 userId = interactionData.userId,
                 postId = interactionData.postId,
-                timeSpentOnPost = interactionData.timeSpentOnPost,
+                startTimestamp = interactionData.startTimestamp,
+                endTimestamp = interactionData.endTimestamp,
                 likeState = interactionData.likeState,
                 saveState = interactionData.saveState,
-                commentButtonPressed = interactionData.commentButtonPressed,
-                commentMade = interactionData.commentMade,
-                timestamp = interactionData.timestamp
+                commentButtonPressed = interactionData.commentButtonPressed
             )
             logger.info("Successfully saved interaction for user: ${interactionData.userId}, post: ${interactionData.postId}")
         } catch (e: Exception) {
             logger.error("Error saving interaction: ${e.message}")
             throw e
-        }
-    }
-
-    @Transactional
-    suspend fun updateInteractionTimestamp(userId: Int, postId: Int, timestamp: Long) {
-        withContext(Dispatchers.IO) {
-            interactionRepository.updateTimestamp(
-                userId = userId,
-                postId = postId,
-                timestamp = timestamp.toString()
-            )
         }
     }
 
@@ -87,6 +74,7 @@ class PostInteractions(private val interactionRepository: UserPostInteractionRep
     suspend fun getLikedPosts(userId: Int): List<Int> {
         return withContext(Dispatchers.IO) {
             interactionRepository.findLikedPostsByUserUserId(userId)
+                .map { it.postId }
         }
     }
 
@@ -94,13 +82,24 @@ class PostInteractions(private val interactionRepository: UserPostInteractionRep
     suspend fun getSavedPosts(userId: Int): List<Int> {
         return withContext(Dispatchers.IO) {
             interactionRepository.findSavedPostsByUserUserId(userId)
+                .map { it.postId }
         }
     }
 
+
     @Transactional(readOnly = true)
-    suspend fun getCommentMadePosts(userId: Int): List<Int> {
-        return withContext(Dispatchers.IO) {
-            interactionRepository.findCommentMadePostsByUserUserId(userId)
+    suspend fun getPostInteractionStates(userId: Int, postId: Int): InteractionStates =
+        withContext(Dispatchers.IO) {
+            try {
+                val projection = interactionRepository.getPostInteractionStates(userId, postId)
+                InteractionStates(
+                    isLiked = projection?.likeState == true,
+                    isSaved = projection?.saveState == true
+                )
+            } catch (e: Exception) {
+                logger.error("Error getting interaction states for user $userId and post $postId: ${e.message}")
+                InteractionStates(isLiked = false, isSaved = false)
+            }
         }
-    }
+
 }

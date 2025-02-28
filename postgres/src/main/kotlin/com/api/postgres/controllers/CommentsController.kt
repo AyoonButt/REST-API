@@ -61,6 +61,31 @@ class CommentsController(
         }
     }
 
+    @GetMapping("/{userId}")
+    suspend fun getCommentsByUserIdAndType(
+        @PathVariable userId: Int,
+        @RequestParam commentType: String,
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "10") pageSize: Int
+    ): ResponseEntity<List<CommentDto>> {
+        return try {
+            val comments = commentsService.getCommentsByUserIdAndType(
+                userId = userId,
+                commentType = commentType,
+                page = page,
+                pageSize = pageSize
+            )
+            if (comments.isEmpty()) {
+                ResponseEntity.noContent().build()
+            } else {
+                ResponseEntity.ok(comments)
+            }
+        } catch (e: Exception) {
+            logger.error("Error getting comments for user $userId: ${e.message}")
+            ResponseEntity.internalServerError().build()
+        }
+    }
+
 
 
     @GetMapping("/{commentId}/replies")
@@ -126,7 +151,21 @@ class CommentsController(
             throw e
         }
     }
-
+    @GetMapping("/{commentId}/root-parent")
+    suspend fun getRootParentId(@PathVariable commentId: Int): ResponseEntity<CommentDto> {
+        return try {
+            val rootComment = commentsService.findRootCommentData(commentId)
+            if (rootComment != null) {
+                ResponseEntity.ok(rootComment)
+            } else {
+                logger.info("No root parent found for comment $commentId")
+                ResponseEntity.notFound().build()
+            }
+        } catch (e: Exception) {
+            logger.error("Failed to get root parent comment for comment $commentId", e)
+            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build()
+        }
+    }
 }
 
 

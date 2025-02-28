@@ -4,6 +4,7 @@ import com.api.postgres.UserDto
 import com.api.postgres.UserPreferencesDto
 import com.api.postgres.UserPreferencesProjection
 import com.api.postgres.UserProjection
+import com.api.postgres.UserUpdate
 
 import com.api.postgres.models.*
 
@@ -129,52 +130,6 @@ class UsersService @Autowired constructor(
         user.userId!!
     }
 
-    @Transactional
-    suspend fun updateUser(
-        userId: Int,
-        userDto: UserDto,
-        subscriptions: List<Int>,
-        genres: List<Int>,
-        avoidGenres: List<Int>
-    ): Unit = withContext(Dispatchers.IO) {
-        // Update user basic info
-        userRepository.save(UserEntity(
-            userId = userId,
-            name = userDto.name,
-            username = userDto.username,
-            email = userDto.email,
-            password = userDto.password, // Added password
-            language = userDto.language,
-            region = userDto.region,
-            minMovie = userDto.minMovie,
-            maxMovie = userDto.maxMovie,
-            minTV = userDto.minTV,
-            maxTV = userDto.maxTV,
-            oldestDate = userDto.oldestDate,
-            recentDate = userDto.recentDate,
-            createdAt = userDto.createdAt,    // Added createdAt
-            recentLogin = userDto.recentLogin.toString() // Added recentLogin
-        ))
-
-        // Update subscriptions
-        val currentSubscriptions = userSubscriptionRepository.findProviderIdsByUserIdSortedByPriority(userId)
-        val subscriptionsToAdd = subscriptions.filterNot { currentSubscriptions.contains(it) }
-        val subscriptionsToRemove = currentSubscriptions.filterNot { subscriptions.contains(it) }
-
-        subscriptionsToRemove.forEach { providerId ->
-            userSubscriptionRepository.deleteById(UserSubscriptionId(userId, providerId))
-        }
-
-        subscriptionsToAdd.forEach { providerId ->
-            val priority = userSubscriptionRepository.findMaxPriorityByUserId(userId) + 1
-            userSubscriptionRepository.insertUserSubscription(userId, providerId, priority)
-        }
-
-        // Update genres and avoid genres
-        updateGenres(userId, genres)
-        updateAvoidGenres(userId, avoidGenres)
-    }
-
     private suspend fun updateGenres(userId: Int, newGenres: List<Int>) {
         val currentGenres = userGenreRepository.findGenreIdsByUserId(userId)
         val genresToAdd = newGenres.filterNot { currentGenres.contains(it) }
@@ -218,10 +173,29 @@ class UsersService @Autowired constructor(
         }
     }
 
-    @Transactional(readOnly = true)
     suspend fun getUserPreferences(userId: Int): UserPreferencesDto? {
         return withContext(Dispatchers.IO) {
-            userRepository.findUserPreferencesById(userId)?.toDto()
+            val userPreferences = userRepository.findUserPreferencesById(userId)
+
+            userPreferences?.let { preferences ->
+                UserPreferencesDto(
+                    userId = preferences.userId,
+                    language = preferences.language,
+                    region = preferences.region,
+                    minMovie = preferences.minMovie,
+                    maxMovie = preferences.maxMovie,
+                    minTV = preferences.minTV,
+                    maxTV = preferences.maxTV,
+                    oldestDate = preferences.oldestDate,
+                    recentDate = preferences.recentDate,
+                    subscriptions = userSubscriptionRepository
+                        .findProviderIdsByUserIdSortedByPriority(userId),
+                    genreIds = userGenreRepository
+                        .findGenreIdsByUserIdOrderedByPriority(userId),
+                    avoidGenreIds = userAvoidGenreRepository
+                        .findAvoidGenreIdsByUserId(userId)
+                )
+            }
         }
     }
 
@@ -229,6 +203,37 @@ class UsersService @Autowired constructor(
     suspend fun getProvidersByPriority(userId: Int): List<Int> {
         return withContext(Dispatchers.IO) {
             userSubscriptionRepository.findProviderIdsByUserIdSortedByPriority(userId)
+        }
+    }
+
+    @Transactional
+    suspend fun updateUserProperties(userId: Int, updates: UserUpdate): Result<UserEntity?> = withContext(Dispatchers.IO) {
+        try {
+            // Get current user
+            val currentUser = userRepository.findById(userId).orElse(null) ?: return@withContext Result.failure(
+                NoSuchElementException("User not found with id: $userId")
+            )
+
+            // Apply non-null updates
+            updates.language?.let { currentUser.language = it }
+            updates.region?.let { currentUser.region = it }
+            updates.minMovie?.let { currentUser.minMovie = it }
+            updates.maxMovie?.let { currentUser.maxMovie = it }
+            updates.minTV?.let { currentUser.minTV = it }
+            updates.maxTV?.let { currentUser.maxTV = it }
+            updates.name?.let { currentUser.name = it }
+            updates.username?.let { currentUser.username = it }
+            updates.email?.let { currentUser.email = it }
+            updates.oldestDate?.let { currentUser.oldestDate = it }
+            updates.recentDate?.let { currentUser.recentDate = it }
+
+            // Save and return updated user
+            val updatedUser = userRepository.save(currentUser)
+            logger.info("Successfully updated user properties for userId: $userId")
+            Result.success(updatedUser)
+        } catch (e: Exception) {
+            logger.error("Error updating user properties for userId $userId: ${e.message}")
+            Result.failure(e)
         }
     }
 }

@@ -3,7 +3,6 @@ package com.api.postgres.services
 
 import com.api.postgres.PostDto
 import com.api.postgres.PostProjection
-import com.api.postgres.VideoDto
 import com.api.postgres.models.PostEntity
 import com.api.postgres.repositories.PostGenresRepository
 import com.api.postgres.repositories.PostRepository
@@ -25,25 +24,29 @@ class Posts(
 
     private val logger: Logger = LoggerFactory.getLogger(Posts::class.java)
 
-    private fun PostProjection.toDto() = PostDto(
-        postId = postId,
-        tmdbId = tmdbId,
-        type = type,
-        title = title,
-        subscription = subscription,
-        releaseDate = releaseDate,
-        overview = overview,
-        posterPath = posterPath,
-        voteAverage = voteAverage,
-        voteCount = voteCount,
-        originalLanguage = originalLanguage,
-        originalTitle = originalTitle,
-        popularity = popularity,
-        genreIds = genreIds,
-        postLikeCount = postLikeCount,
-        trailerLikeCount = trailerLikeCount,
-        videoKey = videoKey
-    )
+    private fun PostProjection.toDto(): PostDto? {
+        val tmdbId = this.tmdbId ?: return null
+
+        return PostDto(
+            postId = postId,
+            tmdbId = tmdbId,  // Use the non-null value
+            type = type,
+            title = title,
+            subscription = subscription,
+            releaseDate = releaseDate,
+            overview = overview,
+            posterPath = posterPath,
+            voteAverage = voteAverage,
+            voteCount = voteCount,
+            originalLanguage = originalLanguage,
+            originalTitle = originalTitle,
+            popularity = popularity,
+            genreIds = genreIds,
+            postLikeCount = postLikeCount,
+            trailerLikeCount = trailerLikeCount,
+            videoKey = videoKey
+        )
+    }
 
     @Transactional
     suspend fun addPostsToDatabase(
@@ -93,14 +96,16 @@ class Posts(
     ): List<PostDto> = withContext(Dispatchers.IO) {
         try {
             postRepository.findAllDtosByOrderByPostId(limit, offset)
-                .map { it.toDto() }
+                .mapNotNull { projection ->
+                    projection.tmdbId?.let { // Only map if tmdbId is not null
+                        projection.toDto()
+                    }
+                }
         } catch (e: Exception) {
             logger.error("Error fetching posts: ${e.message}")
             emptyList()
         }
     }
-
-
 
     @Transactional
     suspend fun updateLikeCount(postId: Int) {
@@ -113,14 +118,6 @@ class Posts(
     suspend fun updateTrailerLikeCount(postId: Int) {
         withContext(Dispatchers.IO) {
             postRepository.incrementTrailerLikeCount(postId)
-        }
-    }
-
-    @Transactional(readOnly = true)
-    suspend fun fetchVideosFromDatabase(limit: Int, offset: Int): List<VideoDto> {
-        return withContext(Dispatchers.IO) {
-            postRepository.findAllDtosByOrderByPostId(limit, offset)
-                .map { VideoDto(it.videoKey, it.postId ?: -1, it.tmdbId, it.type) }
         }
     }
 
@@ -140,4 +137,30 @@ class Posts(
             postRepository.findPostIdByTmdbId(tmdbId)
         }
     }
+
+    @Transactional(readOnly = true)
+    suspend fun getPostDtosForInteractionIds(
+        interactionIds: List<Int>
+    ): List<PostDto> {
+        if (interactionIds.isEmpty()) {
+            println("InteractionIds is empty")
+            return emptyList()
+        }
+
+        return try {
+            println("Fetching posts with IDs: $interactionIds")
+
+            // Fetch each post individually and maintain order
+            interactionIds.mapNotNull { id ->
+                postRepository.findDtoById(id)?.toDto()
+            }.also {
+                println("Final posts size: ${it.size}")
+            }
+        } catch (e: Exception) {
+            println("Error fetching posts: ${e.message}")
+            e.printStackTrace()
+            emptyList()
+        }
+    }
+
 }

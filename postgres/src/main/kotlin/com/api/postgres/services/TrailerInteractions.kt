@@ -1,7 +1,6 @@
 package com.api.postgres.services
 
-
-
+import com.api.postgres.InteractionStates
 import com.api.postgres.TrailerInteractionDto
 import com.api.postgres.TrailerInteractionProjection
 import com.api.postgres.repositories.UserTrailerInteractionRepository
@@ -9,50 +8,43 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 
 @Service
 class TrailerInteractions(
     private val userTrailerInteractionRepository: UserTrailerInteractionRepository
 ) {
 
+    private val logger: Logger = LoggerFactory.getLogger(TrailerInteractions::class.java)
     private fun TrailerInteractionProjection.toDto() = TrailerInteractionDto(
         interactionId = interactionId,
         userId = userId,
         postId = postId,
-        timeSpent = timeSpent,
+        startTimestamp = startTimestamp,
+        endTimestamp = endTimestamp,
         replayCount = replayCount,
         isMuted = isMuted,
         likeState = likeState,
         saveState = saveState,
-        commentButtonPressed = commentButtonPressed,
-        commentMade = commentMade,
-        timestamp = timestamp
+        commentButtonPressed = commentButtonPressed
     )
 
-
-    @Transactional
-    suspend fun updateInteractionTimestamp(postId: Int, timestamp: String) {
-
-        userTrailerInteractionRepository.updateTimestamp(postId, timestamp)
-
-    }
 
     @Transactional
     suspend fun saveInteractionData(interaction: TrailerInteractionDto) = withContext(Dispatchers.IO) {
         userTrailerInteractionRepository.insertInteraction(
             userId = interaction.userId,
             postId = interaction.postId,
-            timeSpent = interaction.timeSpent,
+            startTimestamp = interaction.startTimestamp,
+            endTimestamp = interaction.endTimestamp,
             replayCount = interaction.replayCount,
             isMuted = interaction.isMuted,
             likeState = interaction.likeState,
             saveState = interaction.saveState,
-            commentButtonPressed = interaction.commentButtonPressed,
-            commentMade = interaction.commentMade,
-            timestamp = System.currentTimeMillis().toString()
+            commentButtonPressed = interaction.commentButtonPressed
         )
     }
-
 
 
     @Transactional(readOnly = true)
@@ -78,6 +70,7 @@ class TrailerInteractions(
     suspend fun getLikedTrailers(userId: Int): List<Int> {
         return withContext(Dispatchers.IO) {
             userTrailerInteractionRepository.findLikedPostIds(userId)
+                .map { it.postId }
         }
     }
 
@@ -85,13 +78,22 @@ class TrailerInteractions(
     suspend fun getSavedTrailers(userId: Int): List<Int> {
         return withContext(Dispatchers.IO) {
             userTrailerInteractionRepository.findSavedPostIds(userId)
+                .map { it.postId }
         }
     }
 
     @Transactional(readOnly = true)
-    suspend fun getCommentMadeTrailers(userId: Int): List<Int> {
-        return withContext(Dispatchers.IO) {
-            userTrailerInteractionRepository.findCommentMadePostIds(userId)
+    suspend fun getTrailerInteractionStates(userId: Int, postId: Int): InteractionStates =
+        withContext(Dispatchers.IO) {
+            try {
+                val projection = userTrailerInteractionRepository.getTrailerInteractionStates(userId, postId)
+                InteractionStates(
+                    isLiked = projection?.likeState == true,
+                    isSaved = projection?.saveState == true
+                )
+            } catch (e: Exception) {
+                logger.error("Error getting trailer interaction states for user $userId and post $postId: ${e.message}")
+                InteractionStates(isLiked = false, isSaved = false)
+            }
         }
-    }
 }

@@ -1,5 +1,6 @@
 package com.api.postgres.controllers
 
+import com.api.postgres.UserGenreDto
 import com.api.postgres.models.GenreEntity
 import com.api.postgres.services.Genres
 import org.slf4j.Logger
@@ -76,4 +77,40 @@ class GenresController(
             ResponseEntity.notFound().build()
         }
     }
+
+    @GetMapping("/user/{userId}/genres")
+    suspend fun getUserGenres(
+        @PathVariable userId: Int
+    ): ResponseEntity<List<UserGenreDto>> {
+        return genresService.getUserGenres(userId).fold(
+            onSuccess = { genres ->
+                ResponseEntity.ok(genres)
+            },
+            onFailure = { exception ->
+                when (exception) {
+                    is NoSuchElementException -> ResponseEntity.notFound().build()
+                    else -> ResponseEntity.internalServerError().build()
+                }
+            }
+        )
+    }
+
+    @PostMapping("/user/{userId}/update-genres")
+    suspend fun updateUserGenres(
+        @PathVariable userId: Int,
+        @RequestBody genres: List<UserGenreDto>
+    ): ResponseEntity<List<UserGenreDto>> {
+        return genresService.updateUserGenres(userId, genres).fold(
+            onSuccess = { updatedGenres ->
+                ResponseEntity.ok(updatedGenres)
+            },
+            onFailure = { exception ->
+                when (exception) {
+                    is NoSuchElementException -> ResponseEntity.notFound().build()
+                    else -> ResponseEntity.internalServerError().build()
+                }
+            }
+        )
+    }
+
 }

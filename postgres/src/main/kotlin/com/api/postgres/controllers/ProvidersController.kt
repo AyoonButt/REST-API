@@ -1,5 +1,6 @@
 package com.api.postgres.controllers
 
+import com.api.postgres.UserSubscriptionDto
 import com.api.postgres.models.GenreEntity
 import com.api.postgres.models.SubscriptionProvider
 import com.api.postgres.services.ProvidersService
@@ -69,5 +70,40 @@ class ProvidersController(
             logger.warn("No provider IDs found for names: $names")
             ResponseEntity.notFound().build()
         }
+    }
+
+    @GetMapping("/user/{userId}/subscriptions")
+    suspend fun getUserSubscriptions(
+        @PathVariable userId: Int
+    ): ResponseEntity<List<UserSubscriptionDto>> {
+        return providersService.getUserSubscriptions(userId).fold(
+            onSuccess = { subscriptions ->
+                ResponseEntity.ok(subscriptions)
+            },
+            onFailure = { exception ->
+                when (exception) {
+                    is NoSuchElementException -> ResponseEntity.notFound().build()
+                    else -> ResponseEntity.internalServerError().build()
+                }
+            }
+        )
+    }
+
+    @PostMapping("/user/{userId}/update-subscriptions")
+    suspend fun updateUserSubscriptions(
+        @PathVariable userId: Int,
+        @RequestBody subscriptions: List<UserSubscriptionDto>
+    ): ResponseEntity<List<UserSubscriptionDto>> {
+        return providersService.updateUserSubscriptions(userId, subscriptions).fold(
+            onSuccess = { updatedSubscriptions ->
+                ResponseEntity.ok(updatedSubscriptions)
+            },
+            onFailure = { exception ->
+                when (exception) {
+                    is NoSuchElementException -> ResponseEntity.notFound().build()
+                    else -> ResponseEntity.internalServerError().build()
+                }
+            }
+        )
     }
 }

@@ -12,6 +12,7 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import kotlin.collections.map
 
 
 @Service
@@ -27,7 +28,8 @@ class Comments(
         content = content,
         sentiment = sentiment,
         timestamp = timestamp,
-        parentCommentId = parentCommentId
+        parentCommentId = parentCommentId,
+        commentType = commentType
     )
 
     private val logger: Logger = LoggerFactory.getLogger(Comments::class.java)
@@ -56,8 +58,30 @@ class Comments(
             sentiment = comment.sentiment,
             timestamp = comment.timestamp,
             parentCommentId = comment.parentCommentId,
+            commentType = comment.commentType
         )
         return commentRepository.getLastInsertedId()
+    }
+
+    @Transactional(readOnly = true)
+    suspend fun getCommentsByUserIdAndType(
+        userId: Int,
+        commentType: String,
+        page: Int,
+        pageSize: Int
+    ): List<CommentDto> = withContext(Dispatchers.IO) {
+        try {
+            val offset = page * pageSize
+            return@withContext commentRepository.findCommentsByUserIdAndType(
+                userId = userId,
+                commentType = commentType,
+                limit = pageSize,
+                offset = offset
+            ).map { it.toDto() }
+        } catch (e: Exception) {
+            logger.error("Error fetching comments for user $userId: ${e.message}")
+            emptyList()
+        }
     }
 
 
@@ -73,6 +97,17 @@ class Comments(
         } catch (e: Exception) {
             logger.error("Error finding replies for parent comment $parentCommentId: ${e.message}")
             emptyList()
+        }
+    }
+
+    @Transactional(readOnly = true)
+    suspend fun findRootCommentData(commentId: Int): CommentDto? = withContext(Dispatchers.IO) {
+        try {
+            val rootComment = commentRepository.findRootCommentWithData(commentId)
+            rootComment?.toDto()
+        } catch (e: Exception) {
+            logger.error("Error finding root comment data for comment $commentId: ${e.message}")
+            null
         }
     }
 
@@ -128,5 +163,6 @@ class Comments(
                 }
         }
     }
+
 
 }
