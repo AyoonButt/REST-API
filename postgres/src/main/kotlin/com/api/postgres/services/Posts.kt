@@ -3,8 +3,11 @@ package com.api.postgres.services
 
 import com.api.postgres.PostDto
 import com.api.postgres.PostProjection
+import com.api.postgres.UserPreferencesDto
 import com.api.postgres.models.PostEntity
+import com.api.postgres.models.PostLanguages
 import com.api.postgres.repositories.PostGenresRepository
+import com.api.postgres.repositories.PostLanguagesRepository
 import com.api.postgres.repositories.PostRepository
 import com.api.postgres.repositories.PostSubscriptionsRepository
 import org.springframework.stereotype.Service
@@ -19,6 +22,7 @@ class Posts(
     private val postRepository: PostRepository,
     private val postGenresRepository: PostGenresRepository,
     private val postSubscriptionsRepository: PostSubscriptionsRepository,
+    private val postLanguagesRepository: PostLanguagesRepository,
 
 ) {
 
@@ -51,6 +55,7 @@ class Posts(
     @Transactional
     suspend fun addPostsToDatabase(
         mediaType: String,
+        language: String,
         dataList: List<PostDto>,
         providerId: Int
     ) {
@@ -85,6 +90,9 @@ class Posts(
 
                 // Insert subscription relationship
                 postSubscriptionsRepository.insertPostSubscription(savedPost.postId!!, providerId)
+
+                // Insert requested language
+                postLanguagesRepository.insertPostLanguage(savedPost.postId, language)
             }
         }
     }
@@ -159,6 +167,69 @@ class Posts(
         } catch (e: Exception) {
             println("Error fetching posts: ${e.message}")
             e.printStackTrace()
+            emptyList()
+        }
+    }
+
+    @Transactional(readOnly = true)
+    suspend fun getFilteredPostIds(
+        preferences: UserPreferencesDto,
+        loosenFiltering: Boolean = false,
+        loosenAttempt: Int = 0, // 0: normal, 1: try English, 2: drop avoid genres, 3: drop subscriptions
+        limit: Int = 100,
+        offset: Int = 0
+    ): List<Int> = withContext(Dispatchers.IO) {
+        try {
+            // Determine which language to use based on loosening attempt
+            val language = when {
+                loosenFiltering && loosenAttempt >= 1 -> "en" // Try English on first loosening attempt
+                else -> preferences.language
+            }
+
+            // Get posts by language
+            var postIds = postLanguagesRepository.findPostIdsByLanguage(language)
+                .take(limit + offset)
+                .drop(offset)
+
+            // Apply subscription filter unless we're at loosening attempt 3+
+            if (preferences.subscriptions.isNotEmpty() && postIds.isNotEmpty() &&
+                !(loosenFiltering && loosenAttempt >= 3)) {
+
+                val postsWithSubscriptions = postSubscriptionsRepository.findPostIdsBySubscriptions(
+                    subscriptions = preferences.subscriptions
+                )
+
+                // Keep only posts with matching subscriptions
+                postIds = postIds.filter { it in postsWithSubscriptions }
+            }
+
+            // Apply avoid genres filter unless we're at loosening attempt 2+
+            if (preferences.avoidGenreIds.isNotEmpty() && postIds.isNotEmpty() &&
+                !(loosenFiltering && loosenAttempt >= 2)) {
+
+                val postsWithAvoidGenres = postGenresRepository.findPostIdsWithGenres(
+                    postIds = postIds,
+                    genreIds = preferences.avoidGenreIds
+                )
+
+                // Remove posts with avoided genres
+                postIds = postIds.filter { it !in postsWithAvoidGenres }
+            }
+
+            // Log what filters were applied or skipped
+            if (loosenFiltering) {
+                logger.info(
+                    "Loosening filters (attempt $loosenAttempt): " +
+                            "language=$language, " +
+                            "applySubscriptionFilter=${!(loosenAttempt >= 3)}, " +
+                            "applyAvoidGenresFilter=${!(loosenAttempt >= 2)}"
+                )
+            }
+
+            logger.info("Found ${postIds.size} filtered posts for user preferences")
+            postIds
+        } catch (e: Exception) {
+            logger.error("Error fetching filtered posts: ${e.message}")
             emptyList()
         }
     }

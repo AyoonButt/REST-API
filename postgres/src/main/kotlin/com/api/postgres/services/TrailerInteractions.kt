@@ -96,4 +96,15 @@ class TrailerInteractions(
                 InteractionStates(isLiked = false, isSaved = false)
             }
         }
+
+    @Transactional(readOnly = true)
+    suspend fun getRecentlyViewedPostIds(userId: Int, limit: Int): List<Int> = withContext(Dispatchers.IO) {
+        try {
+            userTrailerInteractionRepository.findMostRecentPostIdsByUserId(userId, limit)
+        } catch (e: Exception) {
+            logger.error("Error finding recently viewed trailer posts for user $userId: ${e.message}")
+            emptyList()
+        }
+    }
+
 }

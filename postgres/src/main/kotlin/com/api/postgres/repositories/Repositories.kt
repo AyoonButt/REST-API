@@ -436,8 +436,6 @@ interface UserTrailerInteractionRepository : JpaRepository<UserTrailerInteractio
     fun findSavedPostIds(@Param("userId") userId: Int): List<TimestampProjection>
 
 
-
-
     @Query("""
     SELECT 
         COALESCE(like_state, false) as likeState,
@@ -456,7 +454,21 @@ interface UserTrailerInteractionRepository : JpaRepository<UserTrailerInteractio
         @Param("userId") userId: Int,
         @Param("postId") postId: Int
     ): InteractionStatesProjection?
+
+    @Query("""
+    SELECT uti.post_id FROM user_trailer_interactions uti
+    WHERE uti.user_id = :userId
+    ORDER BY uti.start_timestamp DESC
+    LIMIT :limit
+""", nativeQuery = true)
+    fun findMostRecentPostIdsByUserId(
+        @Param("userId") userId: Int,
+        @Param("limit") limit: Int
+    ): List<Int>
+
 }
+
+
 
 @Repository
 interface UserPostInteractionRepository : JpaRepository<UserPostInteraction, Long> {
@@ -580,6 +592,17 @@ interface UserPostInteractionRepository : JpaRepository<UserPostInteraction, Lon
         @Param("userId") userId: Int,
         @Param("postId") postId: Int
     ): InteractionStatesProjection?
+
+    @Query("""
+    SELECT upi.post_id FROM user_post_interactions upi
+    WHERE upi.user_id = :userId
+    ORDER BY upi.start_timestamp DESC
+    LIMIT :limit
+""", nativeQuery = true)
+    fun findMostRecentPostIdsByUserId(
+        @Param("userId") userId: Int,
+        @Param("limit") limit: Int
+    ): List<Int>
 
 }
 
@@ -711,6 +734,16 @@ interface PostGenresRepository : JpaRepository<PostGenres, PostGenreId> {
         @Param("postId") postId: Int,
         @Param("genreId") genreId: Int
     )
+
+    @Query("""
+        SELECT pg.post_id FROM post_genres pg
+        WHERE pg.post_id IN (:postIds)
+        AND pg.genre_id IN (:genreIds)
+    """, nativeQuery = true)
+    fun findPostIdsWithGenres(
+        @Param("postIds") postIds: List<Int>,
+        @Param("genreIds") genreIds: List<Int>
+    ): List<Int>
 }
 
 @Repository
@@ -725,6 +758,36 @@ interface PostSubscriptionsRepository : JpaRepository<PostSubscriptions, PostSub
         @Param("postId") postId: Int,
         @Param("providerId") providerId: Int
     )
+
+    @Query("""
+        SELECT ps.post_id FROM post_subscriptions ps
+        WHERE ps.provider_id IN (:subscriptions)
+    """, nativeQuery = true)
+    fun findPostIdsBySubscriptions(
+        @Param("subscriptions") subscriptions: List<Int>
+    ): List<Int>
+}
+
+@Repository
+interface PostLanguagesRepository : JpaRepository<PostLanguages, PostLanguageId> {
+    @Modifying
+    @Transactional
+    @Query("""
+        INSERT INTO post_languages (post_id, language_code)
+        VALUES (:postId, :languageCode)
+    """, nativeQuery = true)
+    fun insertPostLanguage(
+        @Param("postId") postId: Int,
+        @Param("languageCode") languageCode: String
+    )
+
+    @Query("""
+        SELECT pl.post_id FROM post_languages pl 
+        WHERE pl.language_code = :languageCode
+    """, nativeQuery = true)
+    fun findPostIdsByLanguage(
+        @Param("languageCode") languageCode: String
+    ): List<Int>
 }
 
 @Repository
@@ -882,7 +945,6 @@ interface UserRepository : JpaRepository<UserEntity, Int> {
         @Param("username") username: String,
         @Param("password") password: String
     ): UserEntity?
-
 
 
     @Query("""

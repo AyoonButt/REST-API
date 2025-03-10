@@ -108,4 +108,26 @@ class PostInteractionsController(
         }
     }
 
+    @GetMapping("/user/{userId}/recent-views")
+    suspend fun getRecentlyViewedPosts(
+        @PathVariable userId: Int,
+        @RequestParam(required = false, defaultValue = "100") limit: Int
+    ): ResponseEntity<List<Int>> {
+        logger.info("Fetching $limit most recently viewed posts for userId: $userId")
+        try {
+            val recentPosts = postInteractionsService.getRecentlyViewedPostIds(userId, limit)
+
+            return if (recentPosts.isNotEmpty()) {
+                logger.info("Found ${recentPosts.size} recently viewed posts for userId: $userId")
+                ResponseEntity.ok(recentPosts)
+            } else {
+                logger.info("No recently viewed posts found for userId: $userId")
+                ResponseEntity.ok(emptyList())
+            }
+        } catch (e: Exception) {
+            logger.error("Error fetching recently viewed posts for userId: $userId", e)
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build()
+        }
+    }
+
 }

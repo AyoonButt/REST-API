@@ -102,4 +102,16 @@ class PostInteractions(private val interactionRepository: UserPostInteractionRep
             }
         }
 
+    @Transactional(readOnly = true)
+    suspend fun getRecentlyViewedPostIds(userId: Int, limit: Int): List<Int> = withContext(Dispatchers.IO) {
+        try {
+            interactionRepository.findMostRecentPostIdsByUserId(userId, limit)
+        } catch (e: Exception) {
+            logger.error("Error finding recently viewed posts for user $userId: ${e.message}")
+            emptyList()
+        }
+    }
+
+
+
 }

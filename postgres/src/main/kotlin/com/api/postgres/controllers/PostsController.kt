@@ -17,12 +17,13 @@ class PostsController(
     @PostMapping("/batch/{mediaType}/{providerId}")
     suspend fun addPosts(
         @PathVariable mediaType: String,
+        @PathVariable language: String,
         @PathVariable providerId: Int,
         @RequestBody posts: List<PostDto>
     ): ResponseEntity<String> {
         logger.info("Adding ${posts.size} $mediaType posts for provider $providerId")
         return try {
-            postsService.addPostsToDatabase(mediaType, posts, providerId)
+            postsService.addPostsToDatabase(mediaType, language, posts, providerId)
             ResponseEntity.status(HttpStatus.CREATED)
                 .body("Successfully added ${posts.size} posts")
         } catch (e: Exception) {

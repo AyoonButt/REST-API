@@ -6,6 +6,7 @@ import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.annotation.JsonSubTypes
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 import kotlinx.serialization.Serializable
+import java.sql.Timestamp
 
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -295,4 +296,34 @@ data class UserUpdate(
     @JsonProperty("email") val email: String? = null,
     @JsonProperty("oldestDate") val oldestDate: String? = null,
     @JsonProperty("recentDate") val recentDate: String? = null
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class MLRecommendationRequest(
+    @JsonProperty("userId") val userId: Int,
+    @JsonProperty("contentType") val contentType: String? = null,
+    @JsonProperty("page") val page: Int = 0,
+    @JsonProperty("pageSize") val pageSize: Int = 20,
+)
+
+/**
+ * Response model from ML recommendation service
+ */
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class MLRecommendationResponse(
+    @JsonProperty("postIds") val postIds: List<Int> = emptyList(),
+)
+
+data class UserBehaviorProfile(
+    val userId: Int,
+    val metrics: Map<String, Float>,
+    val dominantType: String,
+    val updatedAt: Timestamp
+)
+
+data class RecommendationSession(
+    val sessionId: String,
+    val userId: Int,
+    val postIds: List<Int>,
+    val createdAt: java.time.Instant
 )
