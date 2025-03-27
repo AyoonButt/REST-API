@@ -6,6 +6,8 @@ import com.api.postgres.PostProjection
 import com.api.postgres.UserPreferencesDto
 import com.api.postgres.models.PostEntity
 import com.api.postgres.models.PostLanguages
+import com.api.postgres.recommendations.VectorInitialization
+import com.api.postgres.recommendations.VectorService
 import com.api.postgres.repositories.PostGenresRepository
 import com.api.postgres.repositories.PostLanguagesRepository
 import com.api.postgres.repositories.PostRepository
@@ -23,7 +25,7 @@ class Posts(
     private val postGenresRepository: PostGenresRepository,
     private val postSubscriptionsRepository: PostSubscriptionsRepository,
     private val postLanguagesRepository: PostLanguagesRepository,
-
+    private val vectorInitialization: VectorInitialization
 ) {
 
     private val logger: Logger = LoggerFactory.getLogger(Posts::class.java)
@@ -93,6 +95,8 @@ class Posts(
 
                 // Insert requested language
                 postLanguagesRepository.insertPostLanguage(savedPost.postId, language)
+
+                vectorInitialization.initializePostVector(savedPost.postId)
             }
         }
     }
@@ -175,7 +179,7 @@ class Posts(
     suspend fun getFilteredPostIds(
         preferences: UserPreferencesDto,
         loosenFiltering: Boolean = false,
-        loosenAttempt: Int = 0, // 0: normal, 1: try English, 2: drop avoid genres, 3: drop subscriptions
+        loosenAttempt: Int = 0, // 0: normal, 1: try English, 2: preferred genres only, 3: drop avoid genres, 4: drop subscriptions
         limit: Int = 100,
         offset: Int = 0
     ): List<Int> = withContext(Dispatchers.IO) {
@@ -191,9 +195,9 @@ class Posts(
                 .take(limit + offset)
                 .drop(offset)
 
-            // Apply subscription filter unless we're at loosening attempt 3+
+            // Apply subscription filter unless we're at loosening attempt 4+
             if (preferences.subscriptions.isNotEmpty() && postIds.isNotEmpty() &&
-                !(loosenFiltering && loosenAttempt >= 3)) {
+                !(loosenFiltering && loosenAttempt >= 4)) {
 
                 val postsWithSubscriptions = postSubscriptionsRepository.findPostIdsBySubscriptions(
                     subscriptions = preferences.subscriptions
@@ -203,9 +207,28 @@ class Posts(
                 postIds = postIds.filter { it in postsWithSubscriptions }
             }
 
-            // Apply avoid genres filter unless we're at loosening attempt 2+
+            // Apply preferred genres filter unless we're at loosening attempt 2+
+            // This is the new block that prioritizes user's preferred genres
+            if (preferences.genreIds.isNotEmpty() && postIds.isNotEmpty() &&
+                loosenFiltering && loosenAttempt == 2) {
+
+                val postsWithPreferredGenres = postGenresRepository.findPostIdsWithGenres(
+                    postIds = postIds,
+                    genreIds = preferences.genreIds
+                )
+
+                // If we have posts with preferred genres, only keep those
+                if (postsWithPreferredGenres.isNotEmpty()) {
+                    postIds = postsWithPreferredGenres
+                    logger.info("Applied preferred genres filter: kept ${postIds.size} posts with user's preferred genres")
+                } else {
+                    logger.info("No posts found with preferred genres, keeping original filter results")
+                }
+            }
+
+            // Apply avoid genres filter unless we're at loosening attempt 3+
             if (preferences.avoidGenreIds.isNotEmpty() && postIds.isNotEmpty() &&
-                !(loosenFiltering && loosenAttempt >= 2)) {
+                !(loosenFiltering && loosenAttempt >= 3)) {
 
                 val postsWithAvoidGenres = postGenresRepository.findPostIdsWithGenres(
                     postIds = postIds,
@@ -221,8 +244,9 @@ class Posts(
                 logger.info(
                     "Loosening filters (attempt $loosenAttempt): " +
                             "language=$language, " +
-                            "applySubscriptionFilter=${!(loosenAttempt >= 3)}, " +
-                            "applyAvoidGenresFilter=${!(loosenAttempt >= 2)}"
+                            "applySubscriptionFilter=${!(loosenAttempt >= 4)}, " +
+                            "applyPreferredGenresFilter=${loosenAttempt == 2}, " +
+                            "applyAvoidGenresFilter=${!(loosenAttempt >= 3)}"
                 )
             }
 
@@ -230,6 +254,34 @@ class Posts(
             postIds
         } catch (e: Exception) {
             logger.error("Error fetching filtered posts: ${e.message}")
+            emptyList()
+        }
+    }
+
+    @Transactional(readOnly = true)
+    suspend fun getPostLanguageCount(language: String): Int = withContext(Dispatchers.IO) {
+        try {
+            postLanguagesRepository.countByLanguage(language)
+        } catch (e: Exception) {
+            logger.error("Error counting posts for language $language: ${e.message}")
+            0
+        }
+    }
+
+    @Transactional(readOnly = true)
+    suspend fun getPostsInsertedAfter(timestamp: Long): List<PostDto> = withContext(Dispatchers.IO) {
+        try {
+            val postIds = postLanguagesRepository.findPostIdsInsertedAfter(timestamp)
+            if (postIds.isEmpty()) {
+                return@withContext emptyList()
+            }
+
+            // Fetch the actual posts using the IDs
+            postIds.mapNotNull { postId ->
+                postRepository.findDtoById(postId)?.toDto()
+            }
+        } catch (e: Exception) {
+            logger.error("Error fetching posts inserted after $timestamp: ${e.message}")
             emptyList()
         }
     }

@@ -22,8 +22,9 @@ import java.util.concurrent.TimeUnit
 @Service
 class MLModelClient(
     private val restTemplate: RestTemplate,
+    private val objectMapper: ObjectMapper,
     @Value("\${ml.model.url:http://localhost:5000}") private val mlModelUrl: String,
-    @Value("\${ml.connection.timeout:5000}") private val connectionTimeout: Int,
+    @Value("\${ml.connection.timeout:5000}") private val connectionTimeout: Int
 ) {
     private val logger = LoggerFactory.getLogger(MLModelClient::class.java)
 

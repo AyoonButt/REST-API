@@ -113,4 +113,25 @@ class GenresController(
         )
     }
 
+    @GetMapping("/users/{userId}/avoidGenres")
+    suspend fun getUserAvoidGenres(@PathVariable userId: Int): ResponseEntity<List<GenreEntity>> {
+        val result = genresService.getUserAvoidGenres(userId)
+        return result.fold(
+            onSuccess = { ResponseEntity.ok(it) },
+            onFailure = { ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build() }
+        )
+    }
+
+    @PutMapping("/users/{userId}/avoidGenres/update")
+    suspend fun updateUserAvoidGenres(
+        @PathVariable userId: Int,
+        @RequestBody avoidGenreIds: List<Int>
+    ): ResponseEntity<List<GenreEntity>> {
+        val result = genresService.updateUserAvoidGenres(userId, avoidGenreIds)
+        return result.fold(
+            onSuccess = { ResponseEntity.ok(it) },
+            onFailure = { ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build() }
+        )
+    }
+
 }

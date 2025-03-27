@@ -302,8 +302,8 @@ data class UserUpdate(
 data class MLRecommendationRequest(
     @JsonProperty("userId") val userId: Int,
     @JsonProperty("contentType") val contentType: String? = null,
-    @JsonProperty("page") val page: Int = 0,
-    @JsonProperty("pageSize") val pageSize: Int = 20,
+    @JsonProperty("limit") val limit: Int = 20,
+    @JsonProperty("offset") val offset: Int = 0,
 )
 
 /**
@@ -312,6 +312,18 @@ data class MLRecommendationRequest(
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class MLRecommendationResponse(
     @JsonProperty("postIds") val postIds: List<Int> = emptyList(),
+)
+
+
+data class FilterRecommendationRequest(
+    val userId: Int,
+    val scoredPosts: List<ScoredPost>,
+    val limit: Int = 20
+)
+
+data class ScoredPost(
+    val postId: String,
+    val score: Double
 )
 
 data class UserBehaviorProfile(

@@ -7,6 +7,8 @@ import com.api.postgres.UserProjection
 import com.api.postgres.UserUpdate
 
 import com.api.postgres.models.*
+import com.api.postgres.recommendations.UserVectorService
+import com.api.postgres.recommendations.VectorInitialization
 
 import com.api.postgres.repositories.UserAvoidGenresRepository
 import com.api.postgres.repositories.UserGenresRepository
@@ -28,7 +30,9 @@ class UsersService @Autowired constructor(
     private val userRepository: UserRepository,
     private val userSubscriptionRepository: UserSubscriptionRepository,
     private val userGenreRepository: UserGenresRepository,
-    private val userAvoidGenreRepository: UserAvoidGenresRepository
+    private val userAvoidGenreRepository: UserAvoidGenresRepository,
+    private val vectorInitialization: VectorInitialization,
+    private val userVectorService: UserVectorService
 ) {
     private val logger: Logger = LoggerFactory.getLogger(Posts::class.java)
     private fun UserProjection.toDto() = UserDto(
@@ -127,36 +131,9 @@ class UsersService @Autowired constructor(
             )
         }
 
-        user.userId!!
-    }
+        vectorInitialization.initializeUserVector(user.userId!!)
 
-    private suspend fun updateGenres(userId: Int, newGenres: List<Int>) {
-        val currentGenres = userGenreRepository.findGenreIdsByUserId(userId)
-        val genresToAdd = newGenres.filterNot { currentGenres.contains(it) }
-        val genresToRemove = currentGenres.filterNot { newGenres.contains(it) }
-
-        genresToRemove.forEach { genreId ->
-            userGenreRepository.deleteById(UserGenreId(userId, genreId))
-        }
-
-        genresToAdd.forEach { genreId ->
-            val priority = userGenreRepository.findMaxPriorityByUserId(userId) + 1
-            userGenreRepository.insertUserGenre(userId, genreId, priority)
-        }
-    }
-
-    private suspend fun updateAvoidGenres(userId: Int, newAvoidGenres: List<Int>) {
-        val currentAvoidGenres = userAvoidGenreRepository.findAvoidGenreIdsByUserId(userId)
-        val genresToAdd = newAvoidGenres.filterNot { currentAvoidGenres.contains(it) }
-        val genresToRemove = currentAvoidGenres.filterNot { newAvoidGenres.contains(it) }
-
-        genresToRemove.forEach { genreId ->
-            userAvoidGenreRepository.deleteById(UserAvoidGenreId(userId, genreId))
-        }
-
-        genresToAdd.forEach { genreId ->
-            userAvoidGenreRepository.insertUserAvoidGenre(userId, genreId)
-        }
+        user.userId
     }
 
     @Transactional(readOnly = true)
@@ -193,7 +170,7 @@ class UsersService @Autowired constructor(
                     genreIds = userGenreRepository
                         .findGenreIdsByUserIdOrderedByPriority(userId),
                     avoidGenreIds = userAvoidGenreRepository
-                        .findAvoidGenreIdsByUserId(userId)
+                        .findGenreIdsByUserId(userId)
                 )
             }
         }
@@ -230,6 +207,9 @@ class UsersService @Autowired constructor(
             // Save and return updated user
             val updatedUser = userRepository.save(currentUser)
             logger.info("Successfully updated user properties for userId: $userId")
+
+            userVectorService.regenerateUserVectorAfterPreferenceChange(userId)
+
             Result.success(updatedUser)
         } catch (e: Exception) {
             logger.error("Error updating user properties for userId $userId: ${e.message}")

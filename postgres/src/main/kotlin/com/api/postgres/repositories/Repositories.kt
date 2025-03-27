@@ -466,6 +466,19 @@ interface UserTrailerInteractionRepository : JpaRepository<UserTrailerInteractio
         @Param("limit") limit: Int
     ): List<Int>
 
+
+    /**
+     * Check if a list of trailers have any interaction records for a user
+     */
+    @Query("""
+    SELECT uti.post_id FROM user_trailer_interactions uti
+    WHERE uti.user_id = :userId
+    AND uti.post_id IN (:postIds)
+""", nativeQuery = true)
+    fun findInteractedPostIds(
+        @Param("userId") userId: Int,
+        @Param("postIds") postIds: List<Int>
+    ): List<Int>
 }
 
 
@@ -602,6 +615,19 @@ interface UserPostInteractionRepository : JpaRepository<UserPostInteraction, Lon
     fun findMostRecentPostIdsByUserId(
         @Param("userId") userId: Int,
         @Param("limit") limit: Int
+    ): List<Int>
+
+    /**
+     * Check if a list of posts have any interaction records for a user
+     */
+    @Query("""
+    SELECT upi.post_id FROM user_post_interactions upi
+    WHERE upi.user_id = :userId
+    AND upi.post_id IN (:postIds)
+""", nativeQuery = true)
+    fun findInteractedPostIds(
+        @Param("userId") userId: Int,
+        @Param("postIds") postIds: List<Int>
     ): List<Int>
 
 }
@@ -773,8 +799,8 @@ interface PostLanguagesRepository : JpaRepository<PostLanguages, PostLanguageId>
     @Modifying
     @Transactional
     @Query("""
-        INSERT INTO post_languages (post_id, language_code)
-        VALUES (:postId, :languageCode)
+        INSERT INTO post_languages (post_id, language_code, created_at)
+        VALUES (:postId, :languageCode, CURRENT_TIMESTAMP)
     """, nativeQuery = true)
     fun insertPostLanguage(
         @Param("postId") postId: Int,
@@ -782,12 +808,19 @@ interface PostLanguagesRepository : JpaRepository<PostLanguages, PostLanguageId>
     )
 
     @Query("""
-        SELECT pl.post_id FROM post_languages pl 
-        WHERE pl.language_code = :languageCode
+    SELECT pl.post_id FROM post_languages pl 
+    WHERE pl.language_code = :languageCode
+    ORDER BY pl.created_at DESC
     """, nativeQuery = true)
     fun findPostIdsByLanguage(
         @Param("languageCode") languageCode: String
     ): List<Int>
+
+    @Query("SELECT COUNT(*) FROM post_languages WHERE language_code = :language", nativeQuery = true)
+    fun countByLanguage(@Param("language") language: String): Int
+
+    @Query("SELECT post_id FROM post_languages WHERE created_at > to_timestamp(:timestamp / 1000.0) ORDER BY created_at DESC", nativeQuery = true)
+    fun findPostIdsInsertedAfter(@Param("timestamp") timestamp: Long): List<Int>
 }
 
 @Repository
@@ -852,7 +885,7 @@ interface CrewRepository : JpaRepository<CrewEntity, Int> {
             c.episode_count as episodeCount,
             c.popularity,
             c.profile_path as profilePath
-        FROM crew_members c
+        FROM crew c
         WHERE c.post_id = :postId
         ORDER BY c.popularity DESC
         """,
@@ -863,7 +896,7 @@ interface CrewRepository : JpaRepository<CrewEntity, Int> {
     @Modifying
     @Transactional
     @Query("""
-        INSERT INTO crew_members (
+        INSERT INTO crew (
             tmdb_id, person_id, name, gender, known_for_department,
             job, department, episode_count, popularity, profile_path
         ) VALUES (
@@ -999,6 +1032,7 @@ interface UserGenresRepository : JpaRepository<UserGenres, UserGenreId> {
     @Query("SELECT ug.id.genreId FROM UserGenres ug WHERE ug.id.userId = :userId ORDER BY ug.priority")
     fun findGenreIdsByUserIdOrderedByPriority(@Param("userId") userId: Int): List<Int>
 
+    @Transactional
     @Modifying
     @Query("""
         INSERT INTO user_genres (user_id, genre_id, priority)
@@ -1033,6 +1067,7 @@ interface UserSubscriptionRepository : JpaRepository<UserSubscription, UserSubsc
     """)
     fun findProviderIdsByUserIdSortedByPriority(@Param("userId") userId: Int): List<Int>
 
+    @Transactional
     @Modifying
     @Query("""
         INSERT INTO user_subscriptions (user_id, provider_id, priority)
@@ -1050,16 +1085,20 @@ interface UserSubscriptionRepository : JpaRepository<UserSubscription, UserSubsc
 
 @Repository
 interface UserAvoidGenresRepository : JpaRepository<UserAvoidGenres, UserAvoidGenreId> {
-    @Query("SELECT uag.id.genreId FROM UserAvoidGenres uag WHERE uag.user.userId = :userId")
-    fun findAvoidGenreIdsByUserId(@Param("userId") userId: Int): List<Int>
+    @Query(value = "SELECT g.* FROM genre g INNER JOIN user_avoid_genres uag ON g.genre_id = uag.genre_id WHERE uag.user_id = :userId", nativeQuery = true)
+    fun findGenresByUserId(@Param("userId") userId: Int): List<GenreEntity>
+
+    @Query(value = "SELECT genre_id FROM user_avoid_genres WHERE user_id = :userId", nativeQuery = true)
+    fun findGenreIdsByUserId(@Param("userId") userId: Int): List<Int>
 
     @Modifying
-    @Query("""
-        INSERT INTO user_avoid_genres (user_id, genre_id)
-        VALUES (:userId, :genreId)
-    """, nativeQuery = true)
-    fun insertUserAvoidGenre(
-        @Param("userId") userId: Int,
-        @Param("genreId") genreId: Int
-    )
+    @Transactional
+    @Query(value = "DELETE FROM user_avoid_genres WHERE user_id = :userId AND genre_id = :genreId", nativeQuery = true)
+    fun deleteByUserIdAndGenreId(@Param("userId") userId: Int, @Param("genreId") genreId: Int)
+
+    @Modifying
+    @Transactional
+    @Query(value = "INSERT INTO user_avoid_genres (user_id, genre_id) VALUES (:userId, :genreId) ON CONFLICT DO NOTHING", nativeQuery = true)
+    fun insertUserAvoidGenre(@Param("userId") userId: Int, @Param("genreId") genreId: Int)
+
 }

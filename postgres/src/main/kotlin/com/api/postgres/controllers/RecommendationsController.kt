@@ -1,10 +1,13 @@
 package com.api.postgres.controllers
 
+import com.api.postgres.FilterRecommendationRequest
 import com.api.postgres.PostDto
+import com.api.postgres.ScoredPost
 import com.api.postgres.recommendations.BehaviorProfiler
 import com.api.postgres.recommendations.MetadataService
 import com.api.postgres.recommendations.RecommendationService
 import com.api.postgres.recommendations.VectorService
+import org.apache.coyote.BadRequestException
 import org.slf4j.LoggerFactory
 import org.springframework.data.crossstore.ChangeSetPersister.NotFoundException
 import org.springframework.data.domain.Page
@@ -29,13 +32,16 @@ class RecommendationsController(
     suspend fun getRecommendations(
         @PathVariable userId: Int,
         @RequestParam(required = false) contentType: String?,
-        @RequestParam(defaultValue = "0") page: Int,
-        @RequestParam(defaultValue = "20") pageSize: Int
-    ): ResponseEntity<Page<PostDto>> {
+        @RequestParam(defaultValue = "20") limit: Int,
+        @RequestParam(defaultValue = "0") offset: Int
+    ): ResponseEntity<List<PostDto>> {
         try {
-            logger.info("Request for recommendations: userId=$userId, contentType=$contentType, page=$page, pageSize=$pageSize")
-            val recommendations = recommendationService.getRecommendations(userId, contentType, page, pageSize)
+            logger.info("Request for recommendations: userId=$userId, contentType=$contentType, limit=$limit, offset=$offset")
+
+            val recommendations = recommendationService.getRecommendations(userId, contentType, limit, offset)
+            // Extract just the content from the Page object
             return ResponseEntity.ok(recommendations)
+
         } catch (e: NotFoundException) {
             logger.warn("User not found: ${e.message}")
             return ResponseEntity.notFound().build()
@@ -133,6 +139,54 @@ class RecommendationsController(
         } catch (e: Exception) {
             logger.error("Error getting post vector metadata: ${e.message}", e)
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build()
+        }
+    }
+
+    @PostMapping("/posts/filter")
+    suspend fun filterPostRecommendations(
+        @RequestBody request: FilterRecommendationRequest
+    ): List<ScoredPost> {
+        return try {
+            logger.info("Received request to filter post recommendations for user ${request.userId}")
+
+            // Extract postIds and scores from scoredPosts
+            val postIds = request.scoredPosts.map { it.postId }
+            val scores = request.scoredPosts.map { it.score }
+
+            // Call service to filter recommendations
+            recommendationService.getFilteredPostRecommendations(
+                userId = request.userId,
+                postIds = postIds,
+                scores = scores,
+                limit = request.limit
+            )
+        } catch (e: Exception) {
+            logger.error("Error filtering post recommendations: ${e.message}", e)
+            throw e
+        }
+    }
+
+    @PostMapping("/trailers/filter")
+    suspend fun filterTrailerRecommendations(
+        @RequestBody request: FilterRecommendationRequest
+    ): List<ScoredPost> {
+        return try {
+            logger.info("Received request to filter trailer recommendations for user ${request.userId}")
+
+            // Extract postIds and scores from scoredPosts
+            val postIds = request.scoredPosts.map { it.postId }
+            val scores = request.scoredPosts.map { it.score }
+
+            // Call service to filter recommendations
+            recommendationService.getFilteredTrailerRecommendations(
+                userId = request.userId,
+                postIds = postIds,
+                scores = scores,
+                limit = request.limit
+            )
+        } catch (e: Exception) {
+            logger.error("Error filtering trailer recommendations: ${e.message}", e)
+            throw e
         }
     }
 

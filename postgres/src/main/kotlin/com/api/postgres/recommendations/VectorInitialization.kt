@@ -7,17 +7,33 @@ import com.api.postgres.UserGenreDto
 import com.api.postgres.UserPostInteractionDto
 import com.api.postgres.UserSubscriptionDto
 import com.api.postgres.TrailerInteractionDto
+import jakarta.annotation.PostConstruct
 import org.slf4j.LoggerFactory
+import org.springframework.dao.DataAccessException
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import java.sql.ResultSet
 
 @Service
 class VectorInitialization(
     private val jdbcTemplate: JdbcTemplate,
-    private val vectorService: VectorService
+    private val vectorService: VectorService,
+    private val metadataService: MetadataService
 ) {
     private val logger = LoggerFactory.getLogger(VectorInitialization::class.java)
+
+    @PostConstruct
+    fun initialize() {
+        try {
+            // Ensure metadata tables exist
+            metadataService.initializeMetadataTables()
+
+            logger.info("Vector and metadata tables initialized")
+        } catch (e: Exception) {
+            logger.error("Error during initialization: ${e.message}")
+        }
+    }
 
     /**
      * Initialize vectors for all users and posts
@@ -27,6 +43,7 @@ class VectorInitialization(
         initializePostVectors()
     }
 
+    @Transactional
     fun initializeUserVectors() {
         val userIds = jdbcTemplate.queryForList("SELECT user_id FROM users", Int::class.java)
         logger.info("Initializing vectors for ${userIds.size} users")
@@ -42,6 +59,9 @@ class VectorInitialization(
 
                 if (exists == 0) {
                     initializeUserVector(userId)
+
+                    // Also generate and store user metadata
+                    updateUserMetadata(userId)
                 }
             } catch (e: Exception) {
                 logger.error("Error initializing vector for user $userId: ${e.message}")
@@ -49,6 +69,7 @@ class VectorInitialization(
         }
     }
 
+    @Transactional
     fun initializePostVectors() {
         val postIds = jdbcTemplate.queryForList("SELECT post_id FROM posts", Int::class.java)
         logger.info("Initializing vectors for ${postIds.size} posts")
@@ -64,6 +85,9 @@ class VectorInitialization(
 
                 if (exists == 0) {
                     initializePostVector(postId)
+
+                    // Also generate and store post metadata
+                    updatePostMetadata(postId)
                 }
             } catch (e: Exception) {
                 logger.error("Error initializing vector for post $postId: ${e.message}")
@@ -71,6 +95,7 @@ class VectorInitialization(
         }
     }
 
+    @Transactional
     fun initializeUserVector(userId: Int) {
         try {
             // Get user data
@@ -87,6 +112,9 @@ class VectorInitialization(
             // Store vector
             vectorService.storeUserVector(userId, vector)
 
+            // Update metadata
+            updateUserMetadata(userId)
+
             logger.info("Initialized vector for user $userId")
         } catch (e: Exception) {
             logger.error("Error initializing vector for user $userId: ${e.message}")
@@ -94,6 +122,7 @@ class VectorInitialization(
         }
     }
 
+    @Transactional
     fun initializePostVector(postId: Int) {
         try {
             // Get post data
@@ -105,10 +134,144 @@ class VectorInitialization(
             // Store vector
             vectorService.storePostVector(postId, vector)
 
+            // Update metadata
+            updatePostMetadata(postId)
+
             logger.info("Initialized vector for post $postId")
         } catch (e: Exception) {
             logger.error("Error initializing vector for post $postId: ${e.message}")
             throw e
+        }
+    }
+
+    /**
+     * Update user metadata
+     */
+    private fun updateUserMetadata(userId: Int) {
+        try {
+            // Get user data
+            val userDto = jdbcTemplate.queryForObject(
+                "SELECT * FROM users WHERE user_id = ?",
+                { rs, _ -> mapToUserDto(rs) },
+                userId
+            ) ?: throw Exception("User not found")
+
+            // Get user subscriptions
+            val subscriptions = try {
+                jdbcTemplate.query("""
+                        SELECT 
+                            us.user_id as userId,
+                            us.provider_id as providerId,
+                            sp.provider_name as providerName,  
+                            us.priority
+                        FROM user_subscriptions us
+                        JOIN subscription_providers sp ON us.provider_id = sp.provider_id
+                        WHERE us.user_id = ?
+                        ORDER BY us.priority
+                    """, { rs, _ ->
+                    UserSubscriptionDto(
+                        userId = rs.getInt("userId"),
+                        providerId = rs.getInt("providerId"),
+                        providerName = rs.getString("providerName"),
+                        priority = rs.getInt("priority")
+                    )
+                }, userId)
+            } catch (e: Exception) {
+                logger.warn("Error getting user subscriptions: ${e.message}")
+                emptyList()
+            }
+            // Generate metadata
+            val metadata = metadataService.generateUserMetadata(
+                userDto = userDto,
+                subscriptions = subscriptions,
+                comment = "Auto-generated by VectorInitialization"
+            )
+
+            // Store metadata
+            metadataService.storeUserMetadata(userId, "Vector initialization", metadata)
+
+            logger.info("Updated metadata for user $userId")
+        } catch (e: Exception) {
+            logger.error("Error updating metadata for user $userId: ${e.message}")
+        }
+    }
+
+    /**
+     * Update post metadata
+     */
+    private fun updatePostMetadata(postId: Int) {
+        try {
+            // Get post data
+            val postDto = jdbcTemplate.queryForObject(
+                "SELECT * FROM posts WHERE post_id = ?",
+                { rs, _ -> mapToPostDto(rs) },
+                postId
+            ) ?: throw Exception("Post not found")
+
+            // Get cast information
+            val cast = try {
+                val tmdbId = postDto.tmdbId
+                jdbcTemplate.query("""
+                    SELECT * FROM cast_members
+                    WHERE tmdb_id = ?
+                    ORDER BY order_index
+                """, { rs, _ ->
+                    com.api.postgres.CastDto(
+                        personId = rs.getInt("person_id"),
+                        name = rs.getString("name"),
+                        character = rs.getString("character"),
+                        orderIndex = rs.getInt("order_index"),
+                        popularity = rs.getDouble("popularity"),
+                        profilePath = rs.getString("profile_path"),
+                        gender = rs.getInt("gender"),
+                        knownForDepartment = rs.getString("known_for_department"),
+                        episodeCount = rs.getObject("episode_count") as Int
+                    )
+                }, tmdbId)
+            } catch (e: Exception) {
+                logger.warn("Error getting cast info: ${e.message}")
+                emptyList()
+            }
+
+            // Get crew information
+            val crew = try {
+                val tmdbId = postDto.tmdbId
+                jdbcTemplate.query("""
+                    SELECT * FROM crew
+                    WHERE tmdb_id = ?
+                """, { rs, _ ->
+                    com.api.postgres.CrewDto(
+                        personId = rs.getInt("person_id"),
+                        name = rs.getString("name"),
+                        department = rs.getString("department"),
+                        job = rs.getString("job"),
+                        popularity = rs.getDouble("popularity"),
+                        profilePath = rs.getString("profile_path"),
+                        gender = rs.getInt("gender"),
+                        knownForDepartment = rs.getString("known_for_department"),
+                        episodeCount = rs.getObject("episode_count") as Int
+                    )
+                }, tmdbId)
+            } catch (e: Exception) {
+                logger.warn("Error getting crew info: ${e.message}")
+                emptyList()
+            }
+
+            // Generate metadata
+            val metadata = metadataService.generatePostMetadata(
+                postDto = postDto,
+                tmdbId = postDto.tmdbId,
+                comment = "Auto-generated by VectorInitialization",
+                cast = cast,
+                crew = crew
+            )
+
+            // Store metadata
+            metadataService.storePostMetadata(postId, "Vector initialization", metadata)
+
+            logger.info("Updated metadata for post $postId")
+        } catch (e: Exception) {
+            logger.error("Error updating metadata for post $postId: ${e.message}")
         }
     }
 
@@ -123,35 +286,64 @@ class VectorInitialization(
             userId
         ) ?: throw Exception("User not found")
 
-        // Get genres
-        val genres = jdbcTemplate.query("""
-            SELECT ug.user_id, ug.genre_id, g.name as genre_name, ug.priority
-            FROM user_genres ug
-            JOIN genres g ON ug.genre_id = g.genre_id
-            WHERE ug.user_id = ?
-        """, { rs, _ -> mapToGenreDto(rs) }, userId)
+        // Get genres - handle table not existing or different schema
+        val genres = try {
+            jdbcTemplate.query("""
+                SELECT ug.user_id, ug.genre_id, g.genre_name, ug.priority
+                FROM user_genres ug
+                JOIN genres g ON ug.genre_id = g.genre_id
+                WHERE ug.user_id = ?
+            """, { rs, _ -> mapToGenreDto(rs) }, userId)
+        } catch (e: DataAccessException) {
+            // If there's an error, try a different query format
+            try {
+                logger.info("Trying alternative query for user genres")
+                jdbcTemplate.query("""
+                    SELECT ug.user_id, ug.genre_id, g.genre_name, ug.priority
+                    FROM user_genres ug
+                    JOIN genres g ON ug.genre_id = g.genre_id
+                    WHERE ug.user_id = ?
+                """, { rs, _ -> mapToGenreDto(rs) }, userId)
+            } catch (e2: Exception) {
+                logger.warn("Could not get genres for user $userId: ${e2.message}")
+                emptyList()
+            }
+        } catch (e: Exception) {
+            logger.warn("Could not get genres for user $userId: ${e.message}")
+            emptyList()
+        }
 
         // Get post interactions
-        val postInteractions = jdbcTemplate.query("""
-            SELECT * FROM user_post_interactions
-            WHERE user_id = ?
-            ORDER BY start_timestamp DESC
-            LIMIT 100
-        """, { rs, _ -> mapToPostInteractionDto(rs) }, userId)
+        val postInteractions = try {
+            jdbcTemplate.query("""
+                SELECT * FROM user_post_interactions
+                WHERE user_id = ?
+                ORDER BY start_timestamp DESC
+                LIMIT 100
+            """, { rs, _ -> mapToPostInteractionDto(rs) }, userId)
+        } catch (e: Exception) {
+            logger.warn("Could not get post interactions for user $userId: ${e.message}")
+            emptyList()
+        }
 
         // Get trailer interactions
-        val trailerInteractions = jdbcTemplate.query("""
-            SELECT * FROM trailer_interactions
-            WHERE user_id = ?
-            ORDER BY start_timestamp DESC
-            LIMIT 100
-        """, { rs, _ -> mapToTrailerInteractionDto(rs) }, userId)
+        val trailerInteractions = try {
+            jdbcTemplate.query("""
+                SELECT * FROM user_trailer_interactions
+                WHERE user_id = ?
+                ORDER BY start_timestamp DESC
+                LIMIT 100
+            """, { rs, _ -> mapToTrailerInteractionDto(rs) }, userId)
+        } catch (e: Exception) {
+            logger.warn("Could not get trailer interactions for user $userId: ${e.message}")
+            emptyList()
+        }
 
         return UserData(
             userDto = userDto,
-            genres = genres,
-            interactions = postInteractions,
-            trailerInteractions = trailerInteractions
+            genres = genres ?: emptyList(),
+            interactions = postInteractions ?: emptyList(),
+            trailerInteractions = trailerInteractions ?: emptyList()
         )
     }
 
@@ -230,15 +422,6 @@ class VectorInitialization(
             postLikeCount = rs.getInt("post_like_count"),
             trailerLikeCount = rs.getInt("trailer_like_count"),
             videoKey = rs.getString("video_key")
-        )
-    }
-
-    private fun mapToSubscriptionDto(rs: ResultSet): UserSubscriptionDto {
-        return UserSubscriptionDto(
-            userId = rs.getInt("user_id"),
-            providerId = rs.getInt("provider_id"),
-            providerName = rs.getString("provider_name"),
-            priority = rs.getInt("priority")
         )
     }
 

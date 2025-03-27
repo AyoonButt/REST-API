@@ -1,8 +1,12 @@
 package com.api.postgres.recommendations
 
 import com.api.postgres.MLRecommendationRequest
+import com.api.postgres.MLRecommendationResponse
 import com.api.postgres.PostDto
+import com.api.postgres.ScoredPost
 import com.api.postgres.repositories.PostRepository
+import com.api.postgres.repositories.UserPostInteractionRepository
+import com.api.postgres.repositories.UserTrailerInteractionRepository
 import com.api.postgres.services.Posts
 import com.api.postgres.services.UsersService
 import org.slf4j.LoggerFactory
@@ -24,6 +28,8 @@ class RecommendationService(
     private val postsService: Posts,
     private val mlModelClient: MLModelClient,
     private val jdbcTemplate: JdbcTemplate,
+    private val userPostInteractionRepository: UserPostInteractionRepository,
+    private val userTrailerInteractionRepository: UserTrailerInteractionRepository
 ) {
     private val logger = LoggerFactory.getLogger(RecommendationService::class.java)
 
@@ -46,20 +52,96 @@ class RecommendationService(
         return vectorService.getPostVectors(postIds)
     }
 
+    @Transactional(readOnly = true)
+    fun getFilteredPostRecommendations(
+        userId: Int,
+        postIds: List<String>,
+        scores: List<Double>,
+        limit: Int = 20
+    ): List<ScoredPost> {
+        try {
+            logger.info("Filtering post recommendations for user $userId with ${postIds.size} candidates")
+
+            // Convert string IDs to integers
+            val postIdsInt = postIds.map { it.toInt() }
+
+            // Get posts that the user has already interacted with
+            val interactedPostIds = if (postIdsInt.isNotEmpty()) {
+                userPostInteractionRepository.findInteractedPostIds(userId, postIdsInt).toSet()
+            } else {
+                emptySet()
+            }
+
+            logger.info("User $userId has ${interactedPostIds.size} interacted posts from candidate set")
+
+            // Filter out interacted posts and combine with scores
+            val filteredPosts = postIdsInt.zip(scores)
+                .filter { (postId, _) -> postId !in interactedPostIds }
+                .sortedByDescending { (_, score) -> score }
+                .take(limit)
+                .map { (postId, score) -> ScoredPost(postId.toString(), score) }
+
+            logger.info("Returning ${filteredPosts.size} filtered post recommendations for user $userId")
+
+            // Return list of scored posts
+            return filteredPosts
+        } catch (e: Exception) {
+            logger.error("Error filtering post recommendations: ${e.message}", e)
+            throw e
+        }
+    }
+
+    @Transactional(readOnly = true)
+    fun getFilteredTrailerRecommendations(
+        userId: Int,
+        postIds: List<String>,
+        scores: List<Double>,
+        limit: Int = 20
+    ): List<ScoredPost> {
+        try {
+            logger.info("Filtering trailer recommendations for user $userId with ${postIds.size} candidates")
+
+            // Convert string IDs to integers
+            val postIdsInt = postIds.map { it.toInt() }
+
+            // Get trailers that the user has already interacted with
+            val interactedTrailerIds = if (postIdsInt.isNotEmpty()) {
+                userTrailerInteractionRepository.findInteractedPostIds(userId, postIdsInt).toSet()
+            } else {
+                emptySet()
+            }
+
+            logger.info("User $userId has ${interactedTrailerIds.size} interacted trailers from candidate set")
+
+            // Filter out interacted trailers and combine with scores
+            val filteredTrailers = postIdsInt.zip(scores)
+                .filter { (postId, _) -> postId !in interactedTrailerIds }
+                .sortedByDescending { (_, score) -> score }
+                .take(limit)
+                .map { (postId, score) -> ScoredPost(postId.toString(), score) }
+
+            logger.info("Returning ${filteredTrailers.size} filtered trailer recommendations for user $userId")
+
+            // Return list of scored posts
+            return filteredTrailers
+        } catch (e: Exception) {
+            logger.error("Error filtering trailer recommendations: ${e.message}", e)
+            throw e
+        }
+    }
 
     /**
      * Get recommendations for users, handling both regular posts and trailers
      */
     @Transactional(readOnly = true)
-    fun getRecommendations(
+    suspend fun getRecommendations(
         userId: Int,
         contentType: String? = null,  // "posts" or "trailers" or null for all
-        page: Int = 0,
-        pageSize: Int = 20
-    ): Page<PostDto> {
+        limit: Int = 20,
+        offset: Int = 0
+    ): List<PostDto> {
         try {
-            logger.info("Getting recommendations for user $userId, type: $contentType, page: $page, size: $pageSize")
-
+            logger.info("Getting recommendations for user $userId, type: $contentType, limit: $limit, offset: $offset")
             // Check if user exists
             checkUserExists(userId)
 
@@ -67,8 +149,8 @@ class RecommendationService(
             val request = MLRecommendationRequest(
                 userId = userId,
                 contentType = contentType,
-                page = page,
-                pageSize = pageSize
+                limit = limit,
+                offset = offset
             )
 
             // Get recommendations from ML model
@@ -80,20 +162,14 @@ class RecommendationService(
 
                 // Use content-specific fallback based on request type
                 return if (contentType == "trailers") {
-                    getTrailerFallbackRecommendations(userId, emptyList(), page, pageSize)
+                    getTrailerFallbackRecommendations(userId, emptyList(), limit, offset)
                 } else {
-                    getFallbackRecommendations(userId, contentType, emptyList(), page, pageSize)
+                    getFallbackRecommendations(userId, contentType, emptyList(), limit, offset)
                 }
             }
 
             // Get full post data for the recommended posts
-            val posts = getPostsByIds(response.postIds)
-
-            return PageImpl(
-                posts,
-                PageRequest.of(page, pageSize),
-                response.postIds.size.toLong() // Use size as totalCount since it's not in the response
-            )
+            return postsService.getPostDtosForInteractionIds(response.postIds)
 
         } catch (e: NotFoundException) {
             logger.warn("User not found: ${e.message}")
@@ -107,13 +183,13 @@ class RecommendationService(
     /**
      * Fallback method using vector similarity search
      */
-    private fun getFallbackRecommendations(
+    suspend fun getFallbackRecommendations(
         userId: Int,
         contentType: String?,
         excludePostIds: List<Int>,
-        page: Int,
-        pageSize: Int
-    ): Page<PostDto> {
+        limit: Int,
+        offset: Int
+    ): List<PostDto> {
         try {
             // Get user vector
             val userVector = vectorService.getUserVector(userId)
@@ -124,9 +200,9 @@ class RecommendationService(
             // Get subscription provider IDs
             val subscriptionProviderIds = if (subscriptions.isNotEmpty()) {
                 jdbcTemplate.queryForList("""
-                    SELECT provider_id FROM subscription_providers
-                    WHERE provider_name IN (${subscriptions.joinToString { "'$it'" }})
-                """, Int::class.java)
+                SELECT provider_id FROM subscription_providers
+                WHERE provider_name IN (${subscriptions.joinToString { "'$it'" }})
+            """, Int::class.java)
             } else {
                 emptyList()
             }
@@ -134,12 +210,12 @@ class RecommendationService(
             // Create subscription filter for SQL
             val subscriptionFilter = if (subscriptionProviderIds.isNotEmpty()) {
                 """
-                AND EXISTS (
-                    SELECT 1 FROM subscription_providers sp
-                    WHERE sp.provider_name = p.subscription
-                    AND sp.provider_id IN (${subscriptionProviderIds.joinToString()})
-                )
-                """
+            AND EXISTS (
+                SELECT 1 FROM subscription_providers sp
+                WHERE sp.provider_name = p.subscription
+                AND sp.provider_id IN (${subscriptionProviderIds.joinToString()})
+            )
+            """
             } else {
                 ""
             }
@@ -154,28 +230,16 @@ class RecommendationService(
                 ""
             }
 
-            // Get total count for pagination
-            val totalCount = jdbcTemplate.queryForObject("""
-                SELECT COUNT(*) FROM posts p
-                WHERE 1=1 $typeFilter $subscriptionFilter $excludeFilter
-            """, Int::class.java) ?: 0
-
             // Find similar posts using vector similarity
             val similarPostIds = vectorService.findSimilarPosts(
                 userVector = userVector,
-                limit = pageSize,
+                limit = limit,
                 excludePostIds = excludePostIds,
                 contentType = contentType
             )
 
             // Get full post data
-            val posts = getPostsByIds(similarPostIds)
-
-            return PageImpl(
-                posts,
-                PageRequest.of(page, pageSize),
-                totalCount.toLong()
-            )
+            return postsService.getPostDtosForInteractionIds(similarPostIds)
 
         } catch (e: Exception) {
             logger.error("Error getting fallback recommendations: ${e.message}")
@@ -186,12 +250,12 @@ class RecommendationService(
     /**
      * Fallback method for trailer recommendations
      */
-    private fun getTrailerFallbackRecommendations(
+    suspend fun getTrailerFallbackRecommendations(
         userId: Int,
         excludePostIds: List<Int>,
-        page: Int,
-        pageSize: Int
-    ): Page<PostDto> {
+        limit: Int,
+        offset: Int
+    ): List<PostDto> {
         try {
             // Get user vector
             val userVector = vectorService.getUserVector(userId)
@@ -203,24 +267,14 @@ class RecommendationService(
                 ""
             }
 
-            // Get total count of posts with trailers
-            val totalCount = jdbcTemplate.queryForObject("""
-                SELECT COUNT(*) FROM posts p
-                WHERE p.video_key IS NOT NULL AND p.video_key != '' $excludeFilter
-            """, Int::class.java) ?: 0
-
             // Get posts with trailers
             val trailerPostIds = jdbcTemplate.queryForList("""
-                SELECT p.post_id FROM posts p
-                WHERE p.video_key IS NOT NULL AND p.video_key != '' $excludeFilter
-            """, Int::class.java)
+            SELECT p.post_id FROM posts p
+            WHERE p.video_key IS NOT NULL AND p.video_key != '' $excludeFilter
+        """, Int::class.java)
 
             if (trailerPostIds.isEmpty()) {
-                return PageImpl(
-                    emptyList(),
-                    PageRequest.of(page, pageSize),
-                    0
-                )
+                return emptyList()
             }
 
             // Get post vectors
@@ -239,23 +293,16 @@ class RecommendationService(
                 .map { it.first }
 
             // Apply pagination
-            val startIdx = page * pageSize
-            val endIdx = minOf(startIdx + pageSize, sortedPostIds.size)
+            val endIdx = minOf(offset + limit, sortedPostIds.size)
 
-            val pagedPostIds = if (startIdx < sortedPostIds.size) {
-                sortedPostIds.subList(startIdx, endIdx)
+            val pagedPostIds = if (offset < sortedPostIds.size) {
+                sortedPostIds.subList(offset, endIdx)
             } else {
                 emptyList()
             }
 
             // Get full post data
-            val posts = getPostsByIds(pagedPostIds)
-
-            return PageImpl(
-                posts,
-                PageRequest.of(page, pageSize),
-                totalCount.toLong()
-            )
+            return return postsService.getPostDtosForInteractionIds(pagedPostIds)
 
         } catch (e: Exception) {
             logger.error("Error getting trailer fallback recommendations: ${e.message}")

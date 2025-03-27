@@ -4,7 +4,9 @@ import com.api.postgres.UserGenreDto
 import com.api.postgres.UserGenreProjection
 import com.api.postgres.models.GenreEntity
 import com.api.postgres.models.UserGenreId
+import com.api.postgres.recommendations.UserVectorService
 import com.api.postgres.repositories.GenreRepository
+import com.api.postgres.repositories.UserAvoidGenresRepository
 import com.api.postgres.repositories.UserGenresRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -15,7 +17,9 @@ import org.springframework.transaction.annotation.Transactional
 
 @Service
 class Genres(private val genreRepository: GenreRepository,
-             private val userGenresRepository: UserGenresRepository) {
+             private val userGenresRepository: UserGenresRepository,
+             private val userAvoidGenresRepository: UserAvoidGenresRepository,
+             private val userVectorService: UserVectorService) {
 
     private val logger: Logger = LoggerFactory.getLogger(Genres::class.java)
 
@@ -157,10 +161,66 @@ class Genres(private val genreRepository: GenreRepository,
 
             // Return updated genres using projection
             val updatedProjections = userGenresRepository.findProjectedByUserIdOrderByPriority(userId)
+
+            userVectorService.regenerateUserVectorAfterPreferenceChange(userId)
+
             Result.success(updatedProjections.map { it.toDto() })
+
 
         } catch (e: Exception) {
             logger.error("Error updating user genres for userId $userId: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    @Transactional
+    suspend fun getUserAvoidGenres(userId: Int): Result<List<GenreEntity>> = withContext(Dispatchers.IO) {
+        try {
+            val avoidGenres = userAvoidGenresRepository.findGenresByUserId(userId)
+            Result.success(avoidGenres)
+        } catch (e: Exception) {
+            logger.error("Error getting user avoid genres for userId $userId: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    @Transactional
+    suspend fun updateUserAvoidGenres(userId: Int, avoidGenreIds: List<Int>): Result<List<GenreEntity>> = withContext(Dispatchers.IO) {
+        try {
+            // Get current avoid genres
+            val currentAvoidGenres = userAvoidGenresRepository.findGenreIdsByUserId(userId)
+
+            // Find genres to remove
+            val genresToRemove = currentAvoidGenres.filter {
+                !avoidGenreIds.contains(it)
+            }
+
+            // Find genres to add
+            val genresToAdd = avoidGenreIds.filter {
+                !currentAvoidGenres.contains(it)
+            }
+
+            // Remove old avoid genres
+            genresToRemove.forEach { genreId ->
+                userAvoidGenresRepository.deleteByUserIdAndGenreId(userId, genreId)
+            }
+
+            // Add new avoid genres
+            genresToAdd.forEach { genreId ->
+                userAvoidGenresRepository.insertUserAvoidGenre(
+                    userId = userId,
+                    genreId = genreId
+                )
+            }
+
+            // Update user vector for recommendations
+            userVectorService.regenerateUserVectorAfterPreferenceChange(userId)
+
+            // Return updated avoid genres
+            val updatedAvoidGenres = userAvoidGenresRepository.findGenresByUserId(userId)
+            Result.success(updatedAvoidGenres)
+        } catch (e: Exception) {
+            logger.error("Error updating user avoid genres for userId $userId: ${e.message}")
             Result.failure(e)
         }
     }

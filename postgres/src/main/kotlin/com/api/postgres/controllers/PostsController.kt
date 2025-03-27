@@ -14,7 +14,7 @@ class PostsController(
 ) {
     private val logger: Logger = LoggerFactory.getLogger(PostsController::class.java)
 
-    @PostMapping("/batch/{mediaType}/{providerId}")
+    @PostMapping("/batch/{mediaType}/{language}/{providerId}")
     suspend fun addPosts(
         @PathVariable mediaType: String,
         @PathVariable language: String,
@@ -116,6 +116,22 @@ class PostsController(
             ResponseEntity.ok(posts)
         } catch (e: Exception) {
             ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build()
+        }
+    }
+
+    @GetMapping("/language/count/{language}")
+    suspend fun getPostCountByLanguage(@PathVariable language: String): ResponseEntity<Map<String, Int>> {
+        val count = postsService.getPostLanguageCount(language)
+        return ResponseEntity.ok(mapOf("count" to count))
+    }
+
+    @GetMapping("/after/{timestamp}")
+    suspend fun getPostsAfterTimestamp(@PathVariable timestamp: Long): ResponseEntity<List<PostDto>> {
+        val posts = postsService.getPostsInsertedAfter(timestamp)
+        return if (posts.isEmpty()) {
+            ResponseEntity.noContent().build()
+        } else {
+            ResponseEntity.ok(posts)
         }
     }
 }

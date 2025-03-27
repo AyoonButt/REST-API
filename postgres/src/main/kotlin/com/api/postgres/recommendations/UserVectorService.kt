@@ -68,7 +68,7 @@ class UserVectorService(
 
         // Get updated genre preferences
         val genres = jdbcTemplate.query("""
-            SELECT ug.user_id, ug.genre_id, g.name as genre_name, ug.priority
+            SELECT ug.user_id, ug.genre_id, g.genre_name, ug.priority
             FROM user_genres ug
             JOIN genres g ON ug.genre_id = g.genre_id
             WHERE ug.user_id = ?
@@ -84,7 +84,7 @@ class UserVectorService(
 
         // Get recent trailer interactions
         val trailerInteractions = jdbcTemplate.query("""
-            SELECT * FROM trailer_interactions
+            SELECT * FROM user_trailer_interactions
             WHERE user_id = ?
             ORDER BY start_timestamp DESC
             LIMIT 100

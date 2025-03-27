@@ -24,7 +24,7 @@ class VectorTableInitializer(
             jdbcTemplate.execute("""
                 CREATE TABLE IF NOT EXISTS user_vectors (
                     user_id INT PRIMARY KEY,
-                    vector vector(32) NOT NULL,
+                    vector vector(64) NOT NULL,
                     dimension INT NOT NULL,
                     updated_at TIMESTAMP NOT NULL
                 )
@@ -34,7 +34,7 @@ class VectorTableInitializer(
             jdbcTemplate.execute("""
                 CREATE TABLE IF NOT EXISTS post_vectors (
                     post_id INT PRIMARY KEY,
-                    vector vector(32) NOT NULL,
+                    vector vector(64) NOT NULL,
                     dimension INT NOT NULL,
                     updated_at TIMESTAMP NOT NULL
                 )

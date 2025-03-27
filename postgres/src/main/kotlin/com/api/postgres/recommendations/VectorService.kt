@@ -367,16 +367,16 @@ class VectorService(private val jdbcTemplate: JdbcTemplate) {
             val interactedGenres = mutableListOf<Quadruple<Int, String, Int, Int>>()
 
             jdbcTemplate.query("""
-                SELECT g.genre_id, g.name, COUNT(*) as interaction_count,
-                       SUM(CASE WHEN upi.like_state THEN 1 ELSE 0 END) as liked_count
-                FROM user_post_interactions upi
-                JOIN posts p ON upi.post_id = p.post_id
-                JOIN post_games pg ON p.post_id = pg.post_id
-                JOIN genres g ON pg.genre_id = g.genre_id
-                WHERE upi.user_id = ?
-                GROUP BY g.genre_id, g.name
-                ORDER BY interaction_count DESC
-            """, { rs ->
+                    SELECT g.genre_id, g.genre_name as name, COUNT(*) as interaction_count,
+                           SUM(CASE WHEN upi.like_state THEN 1 ELSE 0 END) as liked_count
+                    FROM user_post_interactions upi
+                    JOIN posts p ON upi.post_id = p.post_id
+                    JOIN post_genres pg ON p.post_id = pg.post_id
+                    JOIN genres g ON pg.genre_id = g.genre_id
+                    WHERE upi.user_id = ?
+                    GROUP BY g.genre_id, g.genre_name
+                    ORDER BY interaction_count DESC
+                """, { rs ->
                 val genreId = rs.getInt("genre_id")
                 val name = rs.getString("name")
                 val interactionCount = rs.getInt("interaction_count")
@@ -541,30 +541,33 @@ class VectorService(private val jdbcTemplate: JdbcTemplate) {
         vector.add(normalizeEngagementDuration(avgDuration))
     }
 
-    /**
-     * Add interaction metrics for a specific post
-     */
     private fun addInteractionMetrics(vector: MutableList<Float>, postId: Int) {
         try {
             // Get interaction metrics for this post
             val metrics = jdbcTemplate.queryForMap(
                 """
-                SELECT 
-                    AVG(EXTRACT(EPOCH FROM (TO_TIMESTAMP(end_timestamp,'YYYY-MM-DD HH24:MI:SS') - 
-                                           TO_TIMESTAMP(start_timestamp,'YYYY-MM-DD HH24:MI:SS')))) as avg_duration,
-                    COUNT(*) as total_views,
-                    SUM(CASE WHEN like_state THEN 1 ELSE 0 END)::float / NULLIF(COUNT(*), 0) as like_ratio,
-                    SUM(CASE WHEN save_state THEN 1 ELSE 0 END)::float / NULLIF(COUNT(*), 0) as save_ratio
-                FROM user_post_interactions
-                WHERE post_id = ?
-            """, postId
+            SELECT 
+                AVG(EXTRACT(EPOCH FROM (TO_TIMESTAMP(end_timestamp,'YYYY-MM-DD HH24:MI:SS') - 
+                                       TO_TIMESTAMP(start_timestamp,'YYYY-MM-DD HH24:MI:SS')))) as avg_duration,
+                COUNT(*) as total_views,
+                SUM(CASE WHEN like_state THEN 1 ELSE 0 END)::float / NULLIF(COUNT(*), 0) as like_ratio,
+                SUM(CASE WHEN save_state THEN 1 ELSE 0 END)::float / NULLIF(COUNT(*), 0) as save_ratio
+            FROM user_post_interactions
+            WHERE post_id = ?
+        """, postId
             )
 
+            // Safely convert values with proper type handling
+            val avgDuration = (metrics["avg_duration"] as? Number)?.toDouble() ?: 0.0
+            val totalViews = (metrics["total_views"] as? Number)?.toLong() ?: 0L
+            val likeRatio = (metrics["like_ratio"] as? Number)?.toFloat() ?: 0.5f
+            val saveRatio = (metrics["save_ratio"] as? Number)?.toFloat() ?: 0.5f
+
             // Add normalized metrics to vector
-            vector.add(normalizeWatchDuration(metrics["avg_duration"] as Double? ?: 0.0))
-            vector.add(normalizeViewCount(metrics["total_views"] as Long? ?: 0))
-            vector.add(metrics["like_ratio"] as Float? ?: 0.5f)
-            vector.add(metrics["save_ratio"] as Float? ?: 0.5f)
+            vector.add(normalizeWatchDuration(avgDuration))
+            vector.add(normalizeViewCount(totalViews))
+            vector.add(likeRatio)
+            vector.add(saveRatio)
 
         } catch (e: Exception) {
             logger.error("Error adding interaction metrics for post $postId: ${e.message}")
@@ -594,13 +597,21 @@ class VectorService(private val jdbcTemplate: JdbcTemplate) {
         """, postId
             )
 
+            // Safely convert values with proper type handling
+            val avgDuration = (metrics["avg_duration"] as? Number)?.toDouble() ?: 0.0
+            val totalViews = (metrics["total_views"] as? Number)?.toLong() ?: 0L
+            val avgReplays = (metrics["avg_replays"] as? Number)?.toDouble() ?: 0.0
+            val likeRatio = (metrics["like_ratio"] as? Number)?.toFloat() ?: 0.5f
+            val saveRatio = (metrics["save_ratio"] as? Number)?.toFloat() ?: 0.5f
+            val unmutedRatio = (metrics["unmuted_ratio"] as? Number)?.toFloat() ?: 0.5f
+
             // Add normalized metrics to vector
-            vector.add(normalizeWatchDuration(metrics["avg_duration"] as Double? ?: 0.0))
-            vector.add(normalizeViewCount(metrics["total_views"] as Long? ?: 0))
-            vector.add(normalizeReplayCount(metrics["avg_replays"] as Double? ?: 0.0))
-            vector.add(metrics["like_ratio"] as Float? ?: 0.5f)
-            vector.add(metrics["save_ratio"] as Float? ?: 0.5f)
-            vector.add(metrics["unmuted_ratio"] as Float? ?: 0.5f)
+            vector.add(normalizeWatchDuration(avgDuration))
+            vector.add(normalizeViewCount(totalViews))
+            vector.add(normalizeReplayCount(avgReplays))
+            vector.add(likeRatio)
+            vector.add(saveRatio)
+            vector.add(unmutedRatio)
 
         } catch (e: Exception) {
             logger.error("Error adding trailer interaction metrics for post $postId: ${e.message}")
