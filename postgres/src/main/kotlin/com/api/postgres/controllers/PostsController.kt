@@ -134,4 +134,19 @@ class PostsController(
             ResponseEntity.ok(posts)
         }
     }
+
+    @GetMapping("/provider/{tmdbId}")
+    suspend fun getProviderNameByTmdbId(@PathVariable tmdbId: Int): ResponseEntity<Map<String, String>> {
+        val providerName = postsService.getProviderNameByTmdbId(tmdbId)
+
+        return if (providerName != null) {
+            ResponseEntity.ok(mapOf("provider" to providerName))
+        } else {
+            // Changed this to return an empty string instead of null
+            ResponseEntity.ok(mapOf(
+                "provider" to "",
+                "message" to "No provider found for TMDB ID $tmdbId"
+            ))
+        }
+    }
 }

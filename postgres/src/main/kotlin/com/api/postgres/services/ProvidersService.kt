@@ -12,7 +12,6 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import com.api.postgres.repositories.UserRepository
 import com.api.postgres.repositories.UserSubscriptionRepository
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -22,7 +21,6 @@ import kotlin.Int
 class ProvidersService @Autowired constructor(
     private val providerRepository: ProviderRepository,
     private val userSubscriptionRepository: UserSubscriptionRepository,
-    private val userRepository: UserRepository
 ) {
 
     private val logger: Logger = LoggerFactory.getLogger(ProvidersService::class.java)
@@ -55,7 +53,7 @@ class ProvidersService @Autowired constructor(
     }
 
     @Transactional
-// Suspend function to fetch all providers from the database without pagination
+    // Suspend function to fetch all providers from the database without pagination
     suspend fun fetchProvidersFromDatabase(): List<SubscriptionProvider> {
         return withContext(Dispatchers.IO) {
             providerRepository.findAll().toList() // Assuming a method exists in the repository to fetch all records

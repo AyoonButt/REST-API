@@ -938,8 +938,8 @@ interface ProviderRepository : JpaRepository<SubscriptionProvider, Int> {
 
     fun findByProviderNameContainingIgnoreCase(query: String): List<SubscriptionProvider>
 
-    @Query("SELECT p FROM SubscriptionProvider p WHERE p.providerId = :providerId")
-    fun findByProviderId(@Param("providerId") providerId: Int): SubscriptionProvider?
+    @Query("SELECT p.providerName FROM SubscriptionProvider p WHERE p.providerId = :providerId")
+    fun findProviderNameById(@Param("providerId") providerId: Int): String?
 }
 
 @Repository

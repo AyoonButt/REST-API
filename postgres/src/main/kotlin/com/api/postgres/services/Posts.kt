@@ -12,6 +12,7 @@ import com.api.postgres.repositories.PostGenresRepository
 import com.api.postgres.repositories.PostLanguagesRepository
 import com.api.postgres.repositories.PostRepository
 import com.api.postgres.repositories.PostSubscriptionsRepository
+import com.api.postgres.repositories.ProviderRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import kotlinx.coroutines.Dispatchers
@@ -22,6 +23,7 @@ import org.slf4j.LoggerFactory
 @Service
 class Posts(
     private val postRepository: PostRepository,
+    private val providerRepository: ProviderRepository,
     private val postGenresRepository: PostGenresRepository,
     private val postSubscriptionsRepository: PostSubscriptionsRepository,
     private val postLanguagesRepository: PostLanguagesRepository,
@@ -283,6 +285,44 @@ class Posts(
         } catch (e: Exception) {
             logger.error("Error fetching posts inserted after $timestamp: ${e.message}")
             emptyList()
+        }
+    }
+
+    @Transactional(readOnly = true)
+    suspend fun getProviderNameByTmdbId(tmdbId: Int): String? = withContext(Dispatchers.IO) {
+        try {
+            // First, get the post ID from the TMDB ID
+            val postId = postRepository.findPostIdByTmdbId(tmdbId)
+
+            if (postId == null) {
+                logger.info("No post found with TMDB ID: $tmdbId")
+                return@withContext null
+            }
+
+            // Get the post DTO which contains the subscription field
+            val postDto = postRepository.findDtoById(postId)?.toDto()
+
+            if (postDto == null) {
+                logger.info("No post DTO found for post ID: $postId")
+                return@withContext null
+            }
+
+            // Convert the subscription string to an integer
+            val providerId = postDto.subscription?.toIntOrNull()
+
+            if (providerId == null) {
+                logger.info("Post has invalid provider ID: ${postDto.subscription}")
+                return@withContext null
+            }
+
+            // Get the provider name using the ID
+            val providerName = providerRepository.findProviderNameById(providerId)
+
+            logger.info("Found provider: $providerName for TMDB ID: $tmdbId")
+            return@withContext providerName
+        } catch (e: Exception) {
+            logger.error("Error finding provider for TMDB ID $tmdbId: ${e.message}")
+            return@withContext null
         }
     }
 
